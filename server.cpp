@@ -4,8 +4,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <bits/stdc++.h>
-
+#include "header.h"
+#include "packet.h"
 #define BUFFERSIZE 5240
+#define HEADERSIZE 12
+#define MSS 524
 int main(int argvc, char** argv)
 {
   /* Initialize a debugging flag */
@@ -41,15 +44,14 @@ int main(int argvc, char** argv)
   memset(buffer,sizeof(buffer),'\0');
   
   /* Initialize the socket, define its address and domain */
-  if ((sockfd = socket(PF_INET,SOCK_DGRAM,0)) == -1){
+  if ((sockfd = socket(AF_INET,SOCK_DGRAM,0)) == -1){
     perror("ERROR: socket construction failed");
     exit(1);
   }
   
   my_addr.sin_family = AF_INET;
   my_addr.sin_port = htons(port);
-  my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  memset(my_addr.sin_zero, '\0', sizeof(my_addr.sin_zero));
+  my_addr.sin_addr.s_addr = INADDR_ANY;
   
   /* Assign a port to the socket */
   if (bind(sockfd, (struct sockaddr*)&my_addr, sizeof(struct sockaddr)) == -1){
@@ -60,10 +62,27 @@ int main(int argvc, char** argv)
   if (debug){
     std::cout<<"bind\n";
   }
-    
+  bool connected = false;  
+  struct header h;
+  char payload[MSS - sizeof(struct header)];
+  socklen_t len = sizeof(struct sockaddr);
   while (1){
     /* Start processing the request */
-    socklen_t len;
+    while (!connected){
+        recvfrom(sockfd,(char *)buffer, MSS, MSG_WAITALL, (struct sockaddr*) &c_addr, &len);
+        readPacket(&h, payload, 0, buffer);
+        if (getSYN(h.flags)){
+            std::cout<<"SYN received "<<ntohs(c_addr.sin_port)<<" "<<c_addr.sin_addr.s_addr<<std::endl;
+            h.acknum = h.seqnum + 1;
+            h.seqnum = 0;
+            setACK(&(h.flags));
+            connected = true;
+        }    
+        
+    }
+    writePacket(&h, payload, 0, buffer);
+    sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *) &c_addr, len);
+    std::cout<<"Connection Established "<<c_addr.sin_port<<" "<<c_addr.sin_addr.s_addr<<std::endl;
     if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
         (struct sockaddr*) &c_addr, &len) != -1){
       std::cout << "packet received" << std::endl;
@@ -72,7 +91,7 @@ int main(int argvc, char** argv)
       fout.close();
       std::cout << "Done!" << std::endl;
     }
-    close(new_fd);
+    connected = false;
   }
   close(sockfd);
   return 0;
