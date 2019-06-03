@@ -105,13 +105,15 @@ int cls_init(int sockfd, char* buffer, struct header* h, char* payload, struct s
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
     //w8 for ack
     int expectack= h->seqnum + 1;
+    std::cout << "Close Request Sent!" << std::endl;
     while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
         readPacket(h, payload, 0, buffer);
         if (getACK(h->flags) && h->acknum == expectack ){
             break;
         }
     }
-    /* wait for the other party sending FIN*/
+    std::cout << "Receive first ACK" << std::endl;
+    /* wait for the other party sending FIN */
     while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
         readPacket(h, payload, 0, buffer);
         if (getFIN(h->flags)){
@@ -120,22 +122,26 @@ int cls_init(int sockfd, char* buffer, struct header* h, char* payload, struct s
             h->acknum = h->seqnum + 1;
             writePacket(h, payload, 0, buffer);
             sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+            std::cout << "Receive FIN and ACK Back and Wait 2 Secs" << std::endl;
             wait_cls(2);
+            break;
         }
     }
     return 0;     
 }
 /* actions of respond to a close request */
 int cls_resp1(int sockfd, char* buffer, struct header* h, char* payload, struct sockaddr_in* addr, uint16_t seqnum){
+    std::cout << "Receive Fin" << std::endl;
     resetFLAG(&(h->flags));
     setACK(&(h->flags));
     h->acknum = h->seqnum + 1;
     h->seqnum = seqnum;
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+    std::cout << "Send ACK to FIN" << std::endl;
     return 0;
 }
-/* actions of sending last ACK and wait for closing*/
+/* actions of sending last ACK and wait for closing */
 int cls_resp2(int sockfd, char* buffer, struct header* h, char* payload, struct sockaddr_in* addr, uint16_t seqnum){
     resetFLAG(&(h->flags));
     setFIN(&(h->flags));
@@ -143,15 +149,17 @@ int cls_resp2(int sockfd, char* buffer, struct header* h, char* payload, struct 
     h->acknum = 0;
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+    std::cout<<"Send Second Fin" << std::endl;
     while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
         readPacket(h, payload, 0, buffer);
         if (getACK(h->flags) && h->acknum == seqnum + 1){
+            std::cout<<"Receive ACK to Second FIN"<<std::endl;
             break;
         }
     }
     return 0;
 }
-/* Right now only put this thread into sleep for 2 secs*/
+/* Right now only put this thread into sleep for 2 secs */
 int wait_cls(int timeout){
     std::this_thread::sleep_for(std::chrono::seconds(2));
     return 0;

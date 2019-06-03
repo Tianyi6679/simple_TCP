@@ -51,7 +51,9 @@ int main(int argvc, char** argv) {
     h.flags = 0;
     setACK(&(h.flags));
     send(sockfd, (const char *)buffer, MSS, 0); 
-    std::cout << "Send file!" << std::endl;
+    std::cout << "Send File!" << std::endl;
+    cls_init(sockfd, buffer, &h, payload, &servaddr, &len);
+    std::cout<< "Client Close" << std::endl;
     close(sockfd); 
     return 0; 
 } 
