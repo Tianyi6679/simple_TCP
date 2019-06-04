@@ -30,8 +30,8 @@ int main(int argvc, char** argv) {
     servaddr.sin_port = htons(PORT); 
     servaddr.sin_addr.s_addr = INADDR_ANY; 
     socklen_t len;
-    struct header h;
-    char payload[MSS-sizeof(struct header)];
+    struct Header h;
+    char payload[MSS-sizeof(struct Header)];
     memset(payload, '\0', sizeof(payload));
     // Establish connection to server
     cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, PORT);

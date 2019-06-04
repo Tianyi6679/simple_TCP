@@ -2,6 +2,8 @@
 #define TCPFUNC_H
 #include <stdint.h>
 #include <stdio.h>
+#include <chrono>
+#include <ctime>
 #include <cstring>
 #include <string.h>
 #include <errno.h>
@@ -12,13 +14,112 @@
 #define BUFFERSIZE 5240
 #define HEADERSIZE 12
 #define MSS 524
-struct header{
+#define MAXSEQNUM 25600
+struct Header{
     uint16_t dest_port;
     uint16_t seqnum;
     uint16_t acknum;
     uint8_t flags;
-    char padding[5];
+    uint16_t cwnd;
+    uint16_t len;
+    char padding[4];
 };
+
+class Timer
+{
+public:
+    void start()
+    {
+        m_start = std::chrono::steady_clock::now();
+        m_running = true;
+    }
+    
+    void stop()
+    {
+        m_end = std::chrono::steady_clock::now();
+        m_running = false;
+    }
+    
+    double elapsed()
+    {
+        std::chrono::time_point<std::chrono::steady_clock> endTime;
+        
+        if(m_running)
+        {
+            endTime = std::chrono::steady_clock::now();
+        }
+        else
+        {
+            endTime = m_end;
+        }
+        
+        return std::chrono::duration_cast<std::chrono::milliseconds>(endTime - m_start).count();
+    }
+    
+private:
+    std::chrono::time_point<std::chrono::steady_clock> m_start;
+    std::chrono::time_point<std::chrono::steady_clock> m_end;
+    bool m_running = false;
+};
+
+
+
+class Packet {
+public:
+  Packet(uint16_t dest_port, uint16_t seqnum, uint16_t acknum, uint16_t cwnd, char* data, int len, uint8_t flags) {
+    header.dest_port = dest_port;
+    header.seqnum = seqnum;
+    header.acknum = acknum;
+    header.cwnd = cwnd;
+    header.flags = flags;
+    memset(payload, 0, MSS);
+    if (len > MSS) {
+      fprintf(stderr, "Error creating packet: Payload larger than MSS.\n");
+      exit(-1);
+    } else {
+      header.len = len;
+    }
+    if (payload  != NULL) {
+      memcpy(payload, data, len);
+    } else {
+      fprintf(stderr, "Payload is empty\n");
+      exit(-1);
+    }
+  }
+  bool valid_seq() const {
+    return (header.seqnum >= 0 && header.seqnum <= MAXSEQNUM);
+  }
+  bool valid_ack() const {
+    return (header.seqnum >= 0 && header.seqnum <= MAXSEQNUM);
+  }
+  int payload_len() const {
+    return header.len;
+  }
+  int packet_size() const {
+    return HEADERSIZE + header.len;
+  }
+  int h_seqnum() const {
+    return header.seqnum;
+  }
+  int h_acknum() const {
+    return header.acknum;
+  }
+  short h_cwnd() const {
+    return header.cwnd;
+  }
+  char* p_data() {
+    return payload;
+  }
+  Header p_header() const {
+    return header;
+  }
+  
+private:
+  Header header;
+  char payload[MSS-HEADERSIZE];
+};
+
+
 bool getACK(uint8_t flags);
 bool getFIN(uint8_t flags);
 bool getSYN(uint8_t flags);
@@ -26,13 +127,13 @@ void setACK(uint8_t* flags);
 void setFIN(uint8_t* flags);
 void setSYN(uint8_t* flags);
 void resetFLAG(uint8_t* flags);
-void initConn(struct header*h);
-int cnct_server(int, char*, struct header*, char*, struct sockaddr_in*, socklen_t*);
-int cnct_client(int, char*, struct header*, char*, struct sockaddr_in*, socklen_t*, int);
-int cls_init(int, char*, struct header*, char*, struct sockaddr_in*, socklen_t*);
-int cls_resp1(int, char*, struct header*, char*, struct sockaddr_in*, uint16_t);
-int cls_resp2(int, char*, struct header*, char*, struct sockaddr_in*, uint16_t);
+void initConn(struct Header*h);
+int cnct_server(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
+int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int);
+int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
+int cls_resp1(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);
+int cls_resp2(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);
 int wait_cls(int);
-int readPacket(struct header* h, char* payload, int l, char* packet);
-int writePacket(struct header* h, char* payload, int l, char* packet);
+int readPacket(struct Header* h, char* payload, int l, char* packet);
+int writePacket(struct Header* h, char* payload, int l, char* packet);
 #endif
