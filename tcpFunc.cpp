@@ -188,12 +188,13 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
     char recv_buff[BUFFERSIZE];
     memset(recv_buff, 0, BUFFERSIZE);
 
-    // Initialize timer, seqnum, acknum
+    // Initialize timer, seqnum, acknum, congestion control, ack counter
     Timer rto;
     uint16_t seqnum = 0;
     uint16_t acknum = 0;
     uint16_t cwnd = MSS;
     std::list<Packet> unacked_p;
+    CongestionControl congestion_manager;
 
     // Monitor socket for input
 
@@ -278,6 +279,8 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
                                 unacked_p.erase(packet_iter);
                                 // Restart timer
                                 rto.start();
+                                // Update ssthresh and cwnd
+                                congestion_manager.update();
                             }
                             else{
                                 packet_iter++ ;
@@ -288,11 +291,8 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
             }
         }
         else{
-            /* Implement Timeout here */
+            congestion_manager.timeout()
         }
-
-
-
 
             if (debug){
               std::cout << resp_buffer << std::endl;

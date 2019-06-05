@@ -62,7 +62,79 @@ private:
     bool m_running = false;
 };
 
+class CongestionControl {
+public:
+    CongestionControl(){
+        m_cwnd = cwnd_base;
+        m_ssthresh = ssthresh_base;
+        m_mode = 0;
+    }
 
+    void change_mode(int newmode){
+        m_mode = newmode;
+    }
+
+    void timeout(){
+        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_cwnd = cwnd_base;
+        change_mode(0);
+    }
+
+    void fast_retransmit_start(){
+        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_cwnd = m_ssthresh + 1536;
+    }
+
+    void fast_retransmit_end(){
+        m_cwnd = m_ssthresh;
+        m_mode = 1;
+    }
+
+    void fast_recovery(){
+        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_cwnd = m_ssthresh + 1536;
+        m_mode = 2;
+    }
+
+    int get_cwnd() const{
+        return m_cwnd;
+    }
+
+    int get_ssthresh() const{
+        return m_ssthresh;
+    }
+
+    int get_mode() const{
+        return m_mode;
+    }
+
+    void update(){
+        if (m_mode == 0){
+            if (m_cwnd < m_ssthresh){
+                m_cwnd += 512;
+            }
+            else{
+                change_mode(1);
+                m_cwnd += (int)((float)(512*512) / (float)m_cwnd);
+            }
+        }
+        else if (m_mode == 1){
+            m_cwnd += (int)((float)(512*512) / (float)m_cwnd);
+        }
+        else{
+            m_cwnd += 512;
+        }
+
+    }
+
+private:
+    int m_cwnd;
+    int max_cwnd = 10240;
+    int m_ssthresh;
+    int m_mode; // 0 for slow start, 1 for congestion avoidance, 2 for fast recovery
+    int ssthresh_base = 1024;
+    int cwnd_base = cwnd_base;
+};
 
 class Packet {
 public:
