@@ -1,13 +1,34 @@
-#include <iostream>
-#include "header.h"
-#include "packet.h"
+#include <fstream>
 #include <stdio.h>
 #include <unistd.h>
 #include <cstring>
 #include <string.h>
-using namespace std;
-
+#include <iostream>
+#include <csignal>
+static std::ofstream fout;
+void signalHandler(int signum){
+    if (fout.is_open()){
+        fout.close();
+        fout.open("2.file", std::ofstream::trunc);
+        fout.write("INTERRUPT", 9);
+        fout.close();
+    }
+    switch (signum){
+        case SIGQUIT:
+            std::cout<< " Interrupt signal SIGQUIT received." <<std::endl;
+            signum = 0;
+            break;
+        case SIGTERM:
+            std::cout<< " Interrupt signal SIGTERM received." <<std::endl;
+            signum = 0;
+            break;
+        default:
+            std::cout<< " Unexpected interrupt signal "<<signum<<" received." <<std::endl;
+    }
+    exit(signum);
+}
 int main(){
+    /*
     char buffer[524];
     memset(buffer, '\0', sizeof(buffer));
     cout<<sizeof(buffer)<<endl;
@@ -38,4 +59,11 @@ int main(){
     setSYN(&c);
     cout<<(int)c<<endl;;
     return 0;
+    */
+    signal(SIGQUIT, signalHandler);
+    signal(SIGTERM, signalHandler);
+    fout.open("2.file");
+    fout<< "write something";
+    fout.flush();
+    sleep(1000);
 }

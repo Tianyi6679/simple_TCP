@@ -4,10 +4,39 @@
 #include <string.h>
 #include <stdlib.h>
 #include <bits/stdc++.h>
+#include <csignal>
+#include <sys/poll.h>
 #include "tcpFunc.h"
 
+static std::ofstream fout;
+static std::string fname;
+
+void signalHandler(int signum){
+    if (fout.is_open()){
+        fout.close();
+        fout.open(fname, std::ofstream::trunc);
+        fout.write("INTERRUPT", 9);
+        fout.close();
+    }
+    switch (signum){
+        case SIGQUIT:
+            std::cout<< " Interrupt signal SIGQUIT received." <<std::endl;
+            signum = 0;
+            break;
+        case SIGTERM:
+            std::cout<< " Interrupt signal SIGTERM received." <<std::endl;
+            signum = 0;
+            break;
+        default:
+            std::cout<< " Unexpected interrupt signal "<<signum<<" received." <<std::endl;
+    }
+    exit(signum);
+}
 int main(int argvc, char** argv)
 {
+    
+  signal(SIGQUIT, signalHandler);
+  signal(SIGTERM, signalHandler);
   /* Initialize a debugging flag */
   bool debug = false;
 
@@ -63,33 +92,47 @@ int main(int argvc, char** argv)
   struct Header h;
   char payload[MSS - sizeof(struct Header)];
   socklen_t len = sizeof(struct sockaddr);
-  /*
-        TODO: set socket to non-blocking
-        and change cnct/cls function accordingly
-  */
+  
+  /* setup poll events */
+  struct pollfd ufd[1];
+  ufd[0].fd = sockfd;
+  ufd[0].events = POLLIN;
+  int pret;
+  int fileID = 0;
   while (1){
     /* three-way-handshake */  
     cnct_server(sockfd, buffer, &h, payload, &c_addr, &len);
     connected = true;
-    if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
-        (struct sockaddr*) &c_addr, &len) != -1){
-      std::cout << "Packet Received" << std::endl;
-      std::ofstream fout("1.file");
-      fout << buffer << std::endl;
-      fout.close();
-      std::cout << "Done!" << std::endl;
-    }
-    if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
-        (struct sockaddr*) &c_addr, &len) != -1){
-            readPacket(&h, payload, 0, buffer);
+    fname = std::to_string(++fileID) + ".file";
+    fout.open(fname);
+    while ( (pret = poll(ufd, 1, RTO)) > 0){
+        if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
+            (struct sockaddr*) &c_addr, &len) != -1){
+            readPacket(&h, payload, PAYLOAD, buffer);
+            logging(RECV, &h, 0, 0);
+            /************************************************************************/
             if (getFIN(h.flags)){
                 cls_resp1(sockfd, buffer, &h, payload, &c_addr, 2);
                 cls_resp2(sockfd, buffer, &h, payload, &c_addr, 2);
+                connected = false;
+                break;
             }
+                /* TODO add file receiving logic */
+                /* TODO add check dup logic */
             else{
-                std::cout<< "Miss Close Request" << std::endl;
+                std::cout << "Packet Received" << std::endl;
+                fout << payload;   
             }
+            /************************************************************************/
+        }
     }
+    if (pret == -1) perror("polling failed");
+    else if (pret == 0 & connected == true){
+        std::cout<<"Timeout occurred! close connection!"<<std::endl;
+        cls_init(sockfd, buffer, &h, payload, &c_addr, &len);
+    }
+    fout.close();
+    std::cout << "Done!" << std::endl;
     connected = false;
     std::cout << "Close Connection to Client!" << std::endl;
   }

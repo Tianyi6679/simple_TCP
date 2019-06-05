@@ -13,11 +13,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <netinet/in.h>
-#define BUFFERSIZE 5240
-#define HEADERSIZE 12
-#define MSS 524
-#define PAYLOAD 512
-#define RTO 10000
+#include <string>
 //if error return -1 
 //otherwise return 0
 int readPacket(struct Header* h, char* payload, int l, char* packet){
@@ -31,7 +27,41 @@ int writePacket(struct Header* h, char* payload, int l, char* packet){
     std::memcpy((packet + sizeof(struct Header)), payload, l);
     return sizeof(struct Header) + strlen((const char*)payload);
 }
-
+/* TODO: add dup flag */
+int logging(int flag, struct Header* h, int cwnd, int ssthresh){
+    std::string action, flags;
+    if (flag == RECV) action = "RECV";
+    else action = "SEND";
+    switch (h->flags){
+        case 128:
+            flags = "ACK";
+            break;
+        case 64:
+            flags = "FIN";
+            break;
+        case 32:
+            flags = "SYN";
+            break;
+        case 192:
+            flags = "ACK FIN";
+            break;
+        case 160:
+            flags = "ACK SYN";
+            break;
+        case 96:
+            flags = "SYN FIN";
+            break;
+        default:
+            flags = "ACK SYN FIN";
+    }
+    std::cout<<action<<' '
+             <<h->seqnum<<' '
+             <<h->acknum<<' '
+             <<cwnd<<' '
+             <<ssthresh<<' '
+             <<flags<<std::endl;
+    return 0;
+}
 bool getACK(uint8_t flags) {return flags >> 7;}
 bool getFIN(uint8_t flags) {return (flags & (1 << 6)) != 0;}
 bool getSYN(uint8_t flags) {return (flags & (1 << 5)) != 0;}
@@ -52,8 +82,9 @@ int cnct_server(int sockfd, char* buffer, struct Header* h, char* payload, struc
     while (!connected){
         recvfrom(sockfd,(char *)buffer, MSS, MSG_WAITALL, (struct sockaddr*)c_addr, len);
         readPacket(h, payload, 0, buffer);
+        logging(RECV, h, 0, 0);
         if (getSYN(h->flags)){
-            std::cout<<"SYN received "<<ntohs(((struct sockaddr_in*)c_addr)->sin_port)<<" "<<((struct sockaddr_in*)c_addr)->sin_addr.s_addr<<std::endl;
+            //std::cout<<"SYN received "<<ntohs(((struct sockaddr_in*)c_addr)->sin_port)<<" "<<((struct sockaddr_in*)c_addr)->sin_addr.s_addr<<std::endl;
             h->acknum = h->seqnum + 1;
             h->seqnum = 0;
             setACK(&(h->flags));
@@ -62,7 +93,8 @@ int cnct_server(int sockfd, char* buffer, struct Header* h, char* payload, struc
     }
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)c_addr, *len);
-    std::cout<<"Connection Established "<<((struct sockaddr_in*)c_addr)->sin_port<<" "<<((struct sockaddr_in*)c_addr)->sin_addr.s_addr<<std::endl;
+    logging(SEND, h, 0, 0);
+    //std::cout<<"Connection Established "<<((struct sockaddr_in*)c_addr)->sin_port<<" "<<((struct sockaddr_in*)c_addr)->sin_addr.s_addr<<std::endl;
     return 0;
 }
 
@@ -73,14 +105,16 @@ int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struc
     sendto(sockfd, (const char *)buffer, MSS, 
         MSG_CONFIRM, (const struct sockaddr *) servaddr,  
             sizeof(*servaddr)); 
-    std::cout << "Send SYN" <<std::endl;
+    logging(SEND, h, h->cwnd, 0);
+    //std::cout << "Send SYN" <<std::endl;
     // step 2
     bool connected = false;
     while(!connected){
         recv(sockfd,(char *)buffer, MSS, 0);
         readPacket(h, payload, 0, buffer);
+        logging(RECV, h, h->cwnd, 0);
         if (getSYN(h->flags) && getACK(h->flags) && h->acknum == 1){
-            std::cout<<"ACK received"<<std::endl;
+            //std::cout<<"ACK received"<<std::endl;
             connected = true;
         }
         else{
@@ -89,7 +123,8 @@ int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struc
             sendto(sockfd, (const char *)buffer, MSS, 
                     MSG_CONFIRM, (const struct sockaddr *) servaddr,  
                     sizeof(*servaddr)); 
-            std::cout << "Resend SYN" <<std::endl;
+            logging(SEND, h, h->cwnd, 0);
+            //std::cout << "Resend SYN" <<std::endl;
         }
     }
     // step 3
@@ -107,42 +142,56 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
     h->acknum = 0;
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+    logging(SEND, h, 0, 0);
     //w8 for ack
     int expectack= h->seqnum + 1;
-    std::cout << "Close Request Sent!" << std::endl;
+    //std::cout << "Close Request Sent!" << std::endl;
     while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
         readPacket(h, payload, 0, buffer);
+        logging(RECV, h, 0, 0);
         if (getACK(h->flags) && h->acknum == expectack ){
             break;
         }
     }
-    std::cout << "Receive first ACK" << std::endl;
+    //std::cout << "Receive first ACK" << std::endl;
     /* wait for the other party sending FIN */
-    while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
+    struct pollfd ufd[1];
+    ufd[0].fd = sockfd;
+    ufd[0].events = POLLIN;
+    int pret;
+    int timeout = WaitCLS;
+    Timer t; 
+    t.start();
+    while(poll(ufd, 1, timeout) > 0){
+        recv(sockfd, (char*)buffer, MSS, 0);
         readPacket(h, payload, 0, buffer);
+        logging(RECV, h, 0, 0);
         if (getFIN(h->flags)){
             resetFLAG(&(h->flags));
             setACK(&(h->flags));
             h->acknum = h->seqnum + 1;
             writePacket(h, payload, 0, buffer);
             sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
-            std::cout << "Receive FIN and ACK Back and Wait 2 Secs" << std::endl;
-            wait_cls(2);
-            break;
+            logging(SEND, h, 0, 0);
+            //std::cout << "Receive FIN and ACK Back and Wait 2 Secs" << std::endl;
         }
+        if ( (timeout = WaitCLS - t.elapsed()) <= 0) break;  
     }
+    t.stop();
+    std::cout<<"Wait Close ends"<<std::endl;
     return 0;     
 }
 /* actions of respond to a close request */
 int cls_resp1(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, uint16_t seqnum){
-    std::cout << "Receive Fin" << std::endl;
+    //std::cout << "Receive Fin" << std::endl;
     resetFLAG(&(h->flags));
     setACK(&(h->flags));
     h->acknum = h->seqnum + 1;
     h->seqnum = seqnum;
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
-    std::cout << "Send ACK to FIN" << std::endl;
+    logging(SEND, h, 0, 0);
+    //std::cout << "Send ACK to FIN" << std::endl;
     return 0;
 }
 /* actions of sending last ACK and wait for closing */
@@ -153,11 +202,13 @@ int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct 
     h->acknum = 0;
     writePacket(h, payload, 0, buffer);
     sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
-    std::cout<<"Send Second Fin" << std::endl;
+    logging(SEND, h, 0, 0);
+    //std::cout<<"Send Second Fin" << std::endl;
     while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
         readPacket(h, payload, 0, buffer);
+        logging(RECV, h, 0, 0);
         if (getACK(h->flags) && h->acknum == seqnum + 1){
-            std::cout<<"Receive ACK to Second FIN"<<std::endl;
+            //std::cout<<"Receive ACK to Second FIN"<<std::endl;
             break;
         }
     }
@@ -229,7 +280,7 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
             Packet last_packet_sent = unacked_p.back();
             uint16_t last_seqnum = last_packet_sent.h_seqnum();
             uint16_t last_acknum = last_packet_sent.h_acknum();
-            Packet p(port, last_seqnum, last_acknum, cwnd, *resp_buffer, count, 0);
+            Packet p(port, last_seqnum, last_acknum, cwnd, resp_buffer, count, 0);
 
             // Send the packet
             Header out_header = p.p_header();
@@ -244,7 +295,7 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
             unacked_p.push_back(p);
         }
         else{
-            Packet p(port, 0, 0, cwnd, *resp_buffer, count, 0);
+            Packet p(port, 0, 0, cwnd, resp_buffer, count, 0);
             // Send the packet
             Header out_header = p.p_header();
             char* out_payload = p.p_data();
@@ -291,11 +342,12 @@ int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
             }
         }
         else{
-            congestion_manager.timeout()
+            congestion_manager.timeout();
         }
 
-            if (debug){
-              std::cout << resp_buffer << std::endl;
-            }
-          }
+        if (debug){
+          std::cout << resp_buffer << std::endl;
         }
+    }
+}
+    

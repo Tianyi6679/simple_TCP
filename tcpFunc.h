@@ -11,14 +11,24 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <netinet/in.h>
+#include <algorithm>
 #define BUFFERSIZE 5240
 #define HEADERSIZE 12
 #define MSS 524
 #define MAXSEQNUM 25600
+#define RECV 1
+#define SEND 0
+#define PAYLOAD 512
+#define RTO 10000
+#define WaitCLS 2000
+/* TODO change either cwnd or dest_port (won't use them at all) to indicate duplicate */
 struct Header{
     uint16_t dest_port;
     uint16_t seqnum;
-    uint16_t acknum;
+    uint16_t acknum;   
+    /*
+    FLAGS: ACK|FIN|SYN|PAD|PAD|PAD|PAD|PAD
+    */
     uint8_t flags;
     uint16_t cwnd;
     uint16_t len;
@@ -200,6 +210,7 @@ void setFIN(uint8_t* flags);
 void setSYN(uint8_t* flags);
 void resetFLAG(uint8_t* flags);
 void initConn(struct Header*h);
+int logging(int, struct Header*, int cwnd, int ssthresh);
 int cnct_server(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
 int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int);
 int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
