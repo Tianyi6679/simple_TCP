@@ -144,7 +144,7 @@ private:
     int m_ssthresh;
     int m_mode; // 0 for slow start, 1 for congestion avoidance, 2 for fast recovery
     int ssthresh_base = 1024;
-    int cwnd_base = cwnd_base;
+    int cwnd_base = MSS;
 };
 
 class Packet {
