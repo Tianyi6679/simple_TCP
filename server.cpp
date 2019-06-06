@@ -105,9 +105,20 @@ int main(int argvc, char** argv)
     cnct_server(sockfd, buffer, &h, payload, &c_addr, &len);
     connected = true;
     fname = std::to_string(++fileID) + ".file";
-    fout.open(fname);
+    fout.open(fname, std::ios::binary | std::ios::ate | std::ios::trunc);
+    //fout << "This is a test/n";
+    //fout.flush();
     std::cout << "Packet Received" << std::endl;
     fout << payload;
+    std::cout<<std::string(payload)<<std::endl;
+    fout.flush();
+    Header h_ack;
+    setACK(&h_ack.flags);
+    h_ack.acknum = (h.seqnum + sizeof(payload)) % MAXSEQNUM; 
+    h_ack.seqnum = MSS % MAXSEQNUM;
+    writePacket(&h_ack, payload, 0, buffer);
+    sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+    logging(SEND, &h_ack, 0, 0);
 
     while ( (pret = poll(ufd, 1, RTO)) > 0){
         if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
@@ -127,7 +138,8 @@ int main(int argvc, char** argv)
             else{
                 std::cout << "Packet Received" << std::endl;
                 fout << payload;   
-            }
+                //std::cout<<std::string(payload)<<std::endl;
+                fout.flush();
             /**********************FILE RECEIVING STARTS HERE************************/
 
             // Create the buffer we'll read into and send over socket
@@ -149,7 +161,7 @@ int main(int argvc, char** argv)
             // Is it the packet we expected?
             if (new_p->h_acknum() == acknum){
               fout << payload;
-              //int bytes_written = write(fout, new_p->p_payload(), new_p->payload_len());
+              std::cout<<std::string(payload)<<std::endl;
               acknum += PAYLOAD % MAXSEQNUM ;
               // Send ack for packet
               Header ack_header;
@@ -158,6 +170,7 @@ int main(int argvc, char** argv)
               int ack_len = HEADERSIZE;
               writePacket(&ack_header, payload, 0, outgoing);
               sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+              logging(SEND, &ack_header, 0, 0);
 
               // Do any of the buffered packets now fall in order?
               std::list<Packet>::const_iterator npb = buffered_p.begin();
@@ -185,8 +198,10 @@ int main(int argvc, char** argv)
               int ack_len = HEADERSIZE;
               writePacket(&ack_header, payload, 0, outgoing);
               sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+              logging(SEND, &ack_header, 0, 0);
             }
-      }
+          }
+        }
             /**********************FILE RECEIVING ENDS HERE**************************/
             /************************************************************************/
         }

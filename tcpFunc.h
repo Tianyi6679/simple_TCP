@@ -135,7 +135,6 @@ public:
         else{
             m_cwnd += 512;
         }
-
     }
 
 private:

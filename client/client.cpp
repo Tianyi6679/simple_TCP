@@ -42,10 +42,12 @@ int main(int argvc, char** argv) {
     /************************************************************************/
                         /* example file sending logic begins*/
     std::ifstream fin (fname, std::ios::binary | std::ios::ate);
+    // Get the file length
+    int filelen = fin.tellg();
+    // Reset the pointer to the beginning of the file to read from it
+    fin.seekg(0, std::ios::beg);
     if (fin){
         fin.read(payload, MSS);
-        // add EOF 
-        buffer[MSS] = '\0';
     }
     else {
         perror("ERROR: file not exists");
@@ -59,10 +61,6 @@ int main(int argvc, char** argv) {
     send(sockfd, (const char *)buffer, MSS, 0); 
     logging(SEND, &h, 0, 0);
 
-    // Get the file length
-    int filelen = fin.tellg();
-    // Reset the pointer to the beginning of the file to read from it
-    fin.seekg(0, std::ios::beg);
     // Initialize buffer we'll read into and send over the socket
     char resp_buffer[MSS];
     memset(resp_buffer, 0, MSS);
@@ -82,6 +80,7 @@ int main(int argvc, char** argv) {
     uint16_t acknum = h.acknum;
     uint16_t cwnd = MSS;
     std::list<Packet> unacked_p;
+    int bytes_read = 0;
 
     // Monitor socket for input
     struct pollfd s_poll[1];
@@ -93,7 +92,6 @@ int main(int argvc, char** argv) {
         if (debug){
             std::cout << "Reading!\n";
             }
-        int bytes_read = 0;
         while(bytes_read < congestion_manager.get_cwnd()){
             fin.read(p_buff, PAYLOAD);
             // How many bytes did we actually read?
@@ -113,10 +111,16 @@ int main(int argvc, char** argv) {
             }
             // Prepare Packet for Sending - add to list
             if (unacked_p.empty()){
+                if (debug){
+                std::cout << "Initializing List!";
+                } 
                 Packet p(h.dest_port, 0, 0, 0, resp_buffer, count, 0);
                 unacked_p.push_back(p);
             }
             else{
+                if (debug){
+                std::cout << "Packet list is not empty !";
+                } 
                 Packet last_packet_added = unacked_p.back();
                 uint16_t last_seqnum = last_packet_added.h_seqnum();
                 uint16_t last_acknum = last_packet_added.h_acknum();
@@ -151,6 +155,7 @@ int main(int argvc, char** argv) {
                 if (recv_count = recvfrom(sockfd, (char *)recv_buff, BUFFERSIZE, MSG_WAITALL, 
                     (struct sockaddr*) &servaddr, &len) != -1){
                         readPacket(&recv_h, recv_p, 0, recv_p);
+                        logging(RECV, &recv_h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
                         /*Were we expecting this ack num?*/
                         std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
                         uint16_t recv_ack = recv_h.acknum;
