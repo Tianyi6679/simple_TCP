@@ -59,7 +59,7 @@ int main(int argvc, char** argv) {
     setACK(&(h.flags));
     writePacket(&h, payload, PAYLOAD, buffer);
     send(sockfd, (const char *)buffer, MSS, 0); 
-    logging(SEND, &h, 0, 0);
+    logging(SEND, &h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
 
     // Initialize buffer we'll read into and send over the socket
     char resp_buffer[MSS];
@@ -77,18 +77,27 @@ int main(int argvc, char** argv) {
     // Initialize timer, seqnum, acknum, congestion control, ack counter
     Timer rto;
     uint16_t seqnum = h.seqnum;
-    uint16_t acknum = h.acknum;
     uint16_t cwnd = MSS;
     std::list<Packet> unacked_p;
     int bytes_read = 0;
+    bool reach_eof = false;
+
+    // Add first packet to list
+    if (debug){
+    std::cout << "Initializing List!\n";
+    } 
+    Packet p(&h, payload);
+    unacked_p.push_back(p);
+    bytes_read = PAYLOAD;
 
     // Monitor socket for input
     struct pollfd s_poll[1];
     s_poll[0].fd = sockfd;
     s_poll[0].events = POLLIN;
+    int time_left = RET_TO;
 
     // Until we're done reading
-    while (1){
+    while (!reach_eof){
         if (debug){
             std::cout << "Reading!\n";
             }
@@ -107,46 +116,45 @@ int main(int argvc, char** argv) {
                 }
                 fin.close();
                 memset(resp_buffer, 0, MSS);
+                reach_eof = true;
                 break;
+                // handle connection teardown
             }
-            // Prepare Packet for Sending - add to list
-            if (unacked_p.empty()){
-                if (debug){
-                std::cout << "Initializing List!";
-                } 
-                Packet p(h.dest_port, 0, 0, 0, resp_buffer, count, 0);
-                unacked_p.push_back(p);
-            }
-            else{
-                if (debug){
-                std::cout << "Packet list is not empty !";
-                } 
-                Packet last_packet_added = unacked_p.back();
-                uint16_t last_seqnum = last_packet_added.h_seqnum();
-                uint16_t last_acknum = last_packet_added.h_acknum();
-                Packet p(h.dest_port, last_seqnum+1, last_acknum+1, cwnd, resp_buffer, count, 0);
-                unacked_p.push_back(p);
-            }
+            if (debug){
+            std::cout << "Packet list is not empty !\n";
+            } 
+            //Packet last_packet_added = unacked_p.back();
+            //uint16_t last_seqnum = last_packet_added.h_seqnum();
+            //uint16_t last_acknum = last_packet_added.h_acknum();
+            struct Header new_header;
+            new_header.seqnum = seqnum + count;
+            new_header.acknum = 0;
+            resetFLAG(&(new_header.flags));
+            Packet p(&new_header, p_buff);
+            unacked_p.push_back(p);
             // Update seqnum
             bytes_read += count;
         }
 
         // Send all the unsent packets
-
         std::list<Packet>::iterator packet_iter = unacked_p.begin();
         while(packet_iter!=unacked_p.end()){
             if (packet_iter->h_seqnum() > seqnum){
+                std::cout << "First packet sent as duplicate /n";
                 Header out_header = packet_iter->p_header();
                 char* out_payload = packet_iter->p_payload();
                 int out_len = packet_iter->payload_len();
                 writePacket(&out_header, out_payload, out_len, resp_buffer);
-                seqnum += MSS;
+                send(sockfd, (const char *)resp_buffer, MSS, 0); 
+                logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                seqnum += PAYLOAD;
                 packet_iter++;
             }
         }
         int sock_event = 0;
 
-        if (sock_event = poll(s_poll, 1, RTO) > 0){
+        rto.start();
+        while ((sock_event = poll(s_poll, 1, time_left)) > 0){
             if (s_poll[0].revents & POLLIN){
                 /*Receive Packet*/
                 int recv_count;
@@ -163,24 +171,30 @@ int main(int argvc, char** argv) {
                             uint16_t cur_ack = packet_iter->h_seqnum() + packet_iter->payload_len();
                             if (cur_ack == recv_ack){
                                 // Clear packet from unreceived acks
+                                bytes_read -= packet_iter->payload_len();
                                 unacked_p.erase(packet_iter);
-                                // Restart timer
-                                rto.start();
                                 // Update ssthresh and cwnd
                                 congestion_manager.update();
+                                break;
                             }
                             else{
                                 packet_iter++ ;
                             }
-
                         }
                     }
+                        // If list is empty, break
+                        if(unacked_p.empty()){
+                            break;
+                    }
+            }
+            time_left = time_left - rto.elapsed();
+            if (time_left <= 0){
+                break;
             }
         }
-        else{
+        if (sock_event == 0 || time_left <= 0){
             congestion_manager.timeout();
         }
-
         if (debug){
           std::cout << resp_buffer << std::endl;
         }
