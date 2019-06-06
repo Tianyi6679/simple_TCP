@@ -132,7 +132,10 @@ int main(int argvc, char** argv)
     if (pret == -1) perror("polling failed");
     else if (pret == 0 & connected == true){
         std::cout<<"Timeout occurred! close connection!"<<std::endl;
-        cls_init(sockfd, buffer, &h, payload, &c_addr, &len);
+        if (cls_init(sockfd, buffer, &h, payload, &c_addr, &len) == -1)
+        {
+            std::cout<<"Force Close Connection!"<<std::endl;
+        }
     }
     fout.close();
     std::cout << "Done!" << std::endl;

@@ -174,6 +174,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
     setFIN(&(h->flags));
     h->acknum = 0;
     int expectack= h->seqnum + 1;
+    int sendTimes = 0;
     do {
         writePacket(h, payload, 0, buffer);
         sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
@@ -190,6 +191,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
             }
             if ( (timeout = RET_TO - t.elapsed()) <= 0) break;
         }
+        if (++sendTimes >= 20) return -1;
     } while(!Fin_Ack);
     //std::cout << "Receive first ACK" << std::endl;
     //wait_cls(2);
