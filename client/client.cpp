@@ -7,6 +7,7 @@
 #include <sys/socket.h> 
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
+#include <sys/poll.h>
 #include <fstream>
 #include <iostream>
 #include "../tcpFunc.h"
@@ -34,8 +35,10 @@ int main(int argvc, char** argv) {
     struct Header h;
     char payload[MSS-sizeof(struct Header)];
     memset(payload, '\0', sizeof(payload));
+    // Def congestion manager
+    CongestionControl congestion_manager;
     // Establish connection to server
-    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, PORT);
+    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, PORT, congestion_manager);
     /************************************************************************/
                         /* example file sending logic begins*/
     std::ifstream fin (fname, std::ios::binary | std::ios::ate);
@@ -57,7 +60,7 @@ int main(int argvc, char** argv) {
     logging(SEND, &h, 0, 0);
 
     // Get the file length
-    int len = fin.tellg();
+    int filelen = fin.tellg();
     // Reset the pointer to the beginning of the file to read from it
     fin.seekg(0, std::ios::beg);
     // Initialize buffer we'll read into and send over the socket
@@ -79,10 +82,9 @@ int main(int argvc, char** argv) {
     uint16_t acknum = h.acknum;
     uint16_t cwnd = MSS;
     std::list<Packet> unacked_p;
-    CongestionControl congestion_manager;
 
     // Monitor socket for input
-    struct pollfd s_poll[1] ;
+    struct pollfd s_poll[1];
     s_poll[0].fd = sockfd;
     s_poll[0].events = POLLIN;
 
@@ -178,7 +180,6 @@ int main(int argvc, char** argv) {
           std::cout << resp_buffer << std::endl;
         }
     }
-}
     //std::cout << "Send File!" << std::endl;
                         /* file sending logic ends */
 

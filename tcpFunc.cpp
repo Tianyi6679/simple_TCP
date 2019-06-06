@@ -122,7 +122,8 @@ int cnct_server(int sockfd, char* buffer, struct Header* h, char* payload, struc
     return 0;
 }
 
-int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* servaddr, socklen_t* len, int port){
+int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* servaddr, socklen_t* len, int port,
+ CongestionControl conman){
     //step 1
     struct pollfd ufd[1];
     ufd[0].fd = sockfd;
@@ -141,7 +142,7 @@ int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struc
         while(poll(ufd, 1, timeout) > 0){
             recv(sockfd,(char *)buffer, MSS, 0);
             readPacket(h, payload, 0, buffer);
-            logging(RECV, h, h->cwnd, 0);
+            logging(RECV, h, 0, 0);
             if (getSYN(h->flags) && getACK(h->flags) && h->acknum == 1){
             //std::cout<<"ACK received"<<std::endl;
                 connected = true;
@@ -280,7 +281,7 @@ bool seqnum_comp(Packet a, Packet b){
     }
     else return true;
 }
-
+/*
 int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, uint16_t init_seq,
 uint16_t init_ack, uint16_t init_cwnd, bool debug) {
     // Read from the file
@@ -370,14 +371,14 @@ uint16_t init_ack, uint16_t init_cwnd, bool debug) {
 
         if (sock_event = poll(s_poll, 1, RTO) > 0){
             if (s_poll[0].revents & POLLIN){
-                /*Receive Packet*/
+                //Receive Packet//
                 int recv_count;
                 Header recv_h;
                 char recv_p[MSS];
                 if (recv_count = recvfrom(sockfd, (char *)recv_buff, BUFFERSIZE, MSG_WAITALL, 
                     (struct sockaddr*) &c_addr, &addr_len) != -1){
                         readPacket(&recv_h, recv_p, 0, recv_p);
-                        /*Were we expecting this ack num?*/
+                        //Were we expecting this ack num?//
                         std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
                         uint16_t recv_ack = recv_h.acknum;
                         while(packet_iter!=unacked_p.end()){
@@ -407,6 +408,7 @@ uint16_t init_ack, uint16_t init_cwnd, bool debug) {
         }
     }
 }
+
 
 int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, bool debug,
 uint16_t init_seqnum, uint16_t init_acknum) {
@@ -487,6 +489,6 @@ uint16_t init_seqnum, uint16_t init_acknum) {
             sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)c_addr, sizeof(*c_addr));
         }
     }
-}
+} */
 
     

@@ -143,43 +143,29 @@ int main(int argvc, char** argv)
             uint16_t acknum = (h.acknum + 1) % MAXSEQNUM;
             uint16_t seqnum = (h.seqnum + 1) % MAXSEQNUM;
 
-            // While data is received
-            //while(int count = recvfrom(sockfd, (char*) incoming, MSS, MSG_WAITALL, c_addr, &addr_len) != 0){
-            //if (count = -1){
-              //perror("Error reading from the socket");
-              //exit(-1);
-            //}
             // Else store the packet in an object
-            recv_p = reinterpret_cast<Packet*>(buffer);
-            Packet* new_p = new Packet(port, recv_p->h_seqnum(), recv_p->h_acknum(), recv_p->h_dup(), recv_p->p_payload(), 
-            recv_p->payload_len(), recv_p->h_flags());
+            Packet* new_p = new Packet(&h, payload);
 
             // Is it the packet we expected?
             if (new_p->h_acknum() == acknum){
-              int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
-              if (bytes_written < 0){
-                perror("Error: unable to write data to file\n");
-              }
-              acknum += bytes_written % MAXSEQNUM ;
+              fout << payload;
+              //int bytes_written = write(fout, new_p->p_payload(), new_p->payload_len());
+              acknum += PAYLOAD % MAXSEQNUM ;
               // Send ack for packet
               Header ack_header;
               ack_header.acknum = acknum;
               ack_header.seqnum = seqnum;
               int ack_len = HEADERSIZE;
-              char* payload = "\0" ;
-              writePacket(&ack_header, payload, ack_len, outgoing);
+              writePacket(&ack_header, payload, 0, outgoing);
               sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
 
               // Do any of the buffered packets now fall in order?
               std::list<Packet>::const_iterator npb = buffered_p.begin();
               while(npb != buffered_p.end()){
                 while (!buffered_p.empty() && npb->h_acknum() == acknum){
-                    int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
-                    if (bytes_written < 0){
-                        perror("Error: unable to write data to file\n");
-                    }
+                    fout << payload; 
                     buffered_p.erase(npb);
-                    acknum += bytes_written % MAXSEQNUM ;
+                    acknum += MSS % MAXSEQNUM ;
                     npb++;
                   }
               }
@@ -197,12 +183,10 @@ int main(int argvc, char** argv)
               ack_header.seqnum=seqnum;
               ack_header.dup = true; 
               int ack_len = HEADERSIZE;
-              char* payload = "\0";
-              writePacket(&ack_header, payload, ack_len, outgoing);
+              writePacket(&ack_header, payload, 0, outgoing);
               sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
             }
       }
-}
             /**********************FILE RECEIVING ENDS HERE**************************/
             /************************************************************************/
         }
