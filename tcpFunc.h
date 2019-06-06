@@ -30,7 +30,7 @@ struct Header{
     FLAGS: ACK|FIN|SYN|PAD|PAD|PAD|PAD|PAD
     */
     uint8_t flags;
-    uint16_t cwnd;
+    uint16_t dup;
     uint16_t len;
     char padding[4];
 };
@@ -148,11 +148,11 @@ private:
 
 class Packet {
 public:
-  Packet(uint16_t dest_port, uint16_t seqnum, uint16_t acknum, uint16_t cwnd, char* data, int len, uint8_t flags) {
+  Packet(uint16_t dest_port, uint16_t seqnum, uint16_t acknum, uint16_t dup, char* data, int len, uint8_t flags) {
     header.dest_port = dest_port;
     header.seqnum = seqnum;
     header.acknum = acknum;
-    header.cwnd = cwnd;
+    header.dup = dup;
     header.flags = flags;
     memset(payload, 0, MSS);
     if (len > MSS) {
@@ -186,10 +186,13 @@ public:
   int h_acknum() const {
     return header.acknum;
   }
-  short h_cwnd() const {
-    return header.cwnd;
+  uint8_t h_flags() const{
+    return header.flags;
   }
-  char* p_data() {
+  short h_dup() const {
+    return header.dup;
+  }
+  char* p_payload() {
     return payload;
   }
   Header p_header() const {
