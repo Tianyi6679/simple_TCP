@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string.h>
 #include <stdlib.h>
+#include <cstdio>
 #include <bits/stdc++.h>
 #include <csignal>
 #include <sys/poll.h>
@@ -107,6 +108,7 @@ int main(int argvc, char** argv)
     fout.open(fname);
     std::cout << "Packet Received" << std::endl;
     fout << payload;
+
     while ( (pret = poll(ufd, 1, RTO)) > 0){
         if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
             (struct sockaddr*) &c_addr, &len) != -1){
@@ -126,9 +128,84 @@ int main(int argvc, char** argv)
                 std::cout << "Packet Received" << std::endl;
                 fout << payload;   
             }
+            /**********************FILE RECEIVING STARTS HERE************************/
+
+            // Create the buffer we'll read into and send over socket
+            char incoming[MSS];
+            memset(incoming, 0, MSS);
+            char outgoing[MSS];
+            memset(outgoing, 0, MSS);
+
+            //Initialize some constants
+            int recv_bytes = 0;
+            Packet* recv_p = NULL;
+            std::list<Packet> buffered_p;
+            uint16_t acknum = (h.acknum + 1) % MAXSEQNUM;
+            uint16_t seqnum = (h.seqnum + 1) % MAXSEQNUM;
+
+            // While data is received
+            //while(int count = recvfrom(sockfd, (char*) incoming, MSS, MSG_WAITALL, c_addr, &addr_len) != 0){
+            //if (count = -1){
+              //perror("Error reading from the socket");
+              //exit(-1);
+            //}
+            // Else store the packet in an object
+            recv_p = reinterpret_cast<Packet*>(buffer);
+            Packet* new_p = new Packet(port, recv_p->h_seqnum(), recv_p->h_acknum(), recv_p->h_dup(), recv_p->p_payload(), 
+            recv_p->payload_len(), recv_p->h_flags());
+
+            // Is it the packet we expected?
+            if (new_p->h_acknum() == acknum){
+              int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
+              if (bytes_written < 0){
+                perror("Error: unable to write data to file\n");
+              }
+              acknum += bytes_written % MAXSEQNUM ;
+              // Send ack for packet
+              Header ack_header;
+              ack_header.acknum = acknum;
+              ack_header.seqnum = seqnum;
+              int ack_len = HEADERSIZE;
+              char* payload = "\0" ;
+              writePacket(&ack_header, payload, ack_len, outgoing);
+              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+
+              // Do any of the buffered packets now fall in order?
+              std::list<Packet>::const_iterator npb = buffered_p.begin();
+              while(npb != buffered_p.end()){
+                while (!buffered_p.empty() && npb->h_acknum() == acknum){
+                    int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
+                    if (bytes_written < 0){
+                        perror("Error: unable to write data to file\n");
+                    }
+                    buffered_p.erase(npb);
+                    acknum += bytes_written % MAXSEQNUM ;
+                    npb++;
+                  }
+              }
+            }
+            else{
+              // We didn't receive the right packet
+
+              // Save it in a buffer, sort the buffer
+              buffered_p.push_back(*new_p);
+              buffered_p.sort(seqnum_comp);
+
+              // Send the same ack as before, mark item as a duplicate packet
+              Header ack_header;
+              ack_header.acknum = acknum;
+              ack_header.seqnum=seqnum;
+              ack_header.dup = true; 
+              int ack_len = HEADERSIZE;
+              char* payload = "\0";
+              writePacket(&ack_header, payload, ack_len, outgoing);
+              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+            }
+      }
+}
+            /**********************FILE RECEIVING ENDS HERE**************************/
             /************************************************************************/
         }
-    }
     if (pret == -1) perror("polling failed");
     else if (pret == 0 & connected == true){
         std::cout<<"Timeout occurred! close connection!"<<std::endl;

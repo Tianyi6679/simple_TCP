@@ -31,7 +31,7 @@ struct Header{
     FLAGS: ACK|FIN|SYN|PAD|PAD|PAD|PAD|PAD
     */
     uint8_t flags;
-    uint16_t dup;
+    bool dup;
     uint16_t len;
     char padding[4];
 };
@@ -215,6 +215,7 @@ void setSYN(uint8_t* flags);
 void resetFLAG(uint8_t* flags);
 void initConn(struct Header*h);
 int logging(int, struct Header*, int cwnd, int ssthresh);
+bool seqnum_comp(Packet a, Packet b);
 int cnct_server(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
 int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int);
 int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);

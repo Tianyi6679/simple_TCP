@@ -309,7 +309,6 @@ uint16_t init_ack, uint16_t init_cwnd, bool debug) {
     CongestionControl congestion_manager;
 
     // Monitor socket for input
-
     struct pollfd s_poll[1] ;
 
     s_poll[0].fd = sockfd;
@@ -341,14 +340,15 @@ uint16_t init_ack, uint16_t init_cwnd, bool debug) {
             // Prepare Packet for Sending - add to list
             if (unacked_p.empty()){
                 Packet p(port, 0, 0, 0, resp_buffer, count, 0);
+                unacked_p.push_back(p);
             }
             else{
                 Packet last_packet_added = unacked_p.back();
-                uint16_t last_seqnum = last_packet_sent.h_seqnum();
-                uint16_t last_acknum = last_packet_sent.h_acknum();
+                uint16_t last_seqnum = last_packet_added.h_seqnum();
+                uint16_t last_acknum = last_packet_added.h_acknum();
                 Packet p(port, last_seqnum+1, last_acknum+1, cwnd, resp_buffer, count, 0);
+                unacked_p.push_back(p);
             }
-            unacked_p.push_back(p);
             // Update seqnum
             bytes_read += count;
         }
@@ -408,19 +408,24 @@ uint16_t init_ack, uint16_t init_cwnd, bool debug) {
     }
 }
 
-int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, bool debug) {
+int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, bool debug,
+uint16_t init_seqnum, uint16_t init_acknum) {
 
     // Create the file to store data into
     int file_p = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0666);
 
-    // Create the buffer we'll read into
+    // Create the buffer we'll read into and send over socket
     char incoming[MSS];
     memset(incoming, 0, MSS);
+    char outgoing[MSS];
+    memset(outgoing, 0, MSS);
 
     //Initialize some constants
     int recv_bytes = 0;
     Packet* recv_p = NULL;
     std::list<Packet> buffered_p;
+    uint16_t acknum = init_acknum;
+    uint16_t seqnum = init_seqnum;
 
     // While data is received
     while(int count = recvfrom(sockfd, (char*) incoming, MSS, MSG_WAITALL, c_addr, &addr_len) != 0){
@@ -444,11 +449,15 @@ int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
             Header ack_header;
             ack_header.acknum = acknum;
             ack_header.seqnum = seqnum;
+            int ack_len = HEADERSIZE;
+            char* payload = "\0" ;
+            writePacket(&ack_header, payload, ack_len, outgoing);
+            sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)c_addr, sizeof(*c_addr));
 
-            // Do any of the buffered packet fall in order?
+            // Do any of the buffered packets now fall in order?
             std::list<Packet>::const_iterator npb = buffered_p.begin();
             while(npb != buffered_p.end()){
-                while (npb->h_acknum() == acknum){
+                while (!buffered_p.empty() && npb->h_acknum() == acknum){
                     int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
                     if (bytes_written < 0){
                         perror("Error: unable to write data to file\n");
@@ -463,11 +472,20 @@ int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr
         else{
             // We didn't receive the right packet
 
-            // Save it in a buffer, sort it
+            // Save it in a buffer, sort the buffer
             buffered_p.push_back(*new_p);
             buffered_p.sort(seqnum_comp);
-        }
 
+            // Send the same ack as before, mark item as a duplicate packet
+            Header ack_header;
+            ack_header.acknum = acknum;
+            ack_header.seqnum=seqnum;
+            ack_header.dup = true; 
+            int ack_len = HEADERSIZE;
+            char* payload = "\0";
+            writePacket(&ack_header, payload, ack_len, outgoing);
+            sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)c_addr, sizeof(*c_addr));
+        }
     }
 }
 
