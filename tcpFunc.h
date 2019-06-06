@@ -31,7 +31,7 @@ struct Header{
     FLAGS: ACK|FIN|SYN|PAD|PAD|PAD|PAD|PAD
     */
     uint8_t flags;
-    uint16_t dup;
+    bool dup;
     uint16_t len;
     char padding[4];
 };
@@ -135,7 +135,6 @@ public:
         else{
             m_cwnd += 512;
         }
-
     }
 
 private:
@@ -144,7 +143,7 @@ private:
     int m_ssthresh;
     int m_mode; // 0 for slow start, 1 for congestion avoidance, 2 for fast recovery
     int ssthresh_base = 1024;
-    int cwnd_base = cwnd_base;
+    int cwnd_base = PAYLOAD;
 };
 
 class Packet {
@@ -168,6 +167,15 @@ public:
       fprintf(stderr, "Payload is empty\n");
       exit(-1);
     }
+  }
+  Packet(struct Header* in_h, char* in_payload){
+    memset(payload, 0, MSS);
+    memcpy(payload, in_payload, MSS);
+    header.dest_port = in_h->dest_port;
+    header.seqnum = in_h->seqnum;
+    header.acknum = in_h->acknum;
+    header.dup = in_h->dup;
+    header.flags = in_h->flags;
   }
   bool valid_seq() const {
     return (header.seqnum >= 0 && header.seqnum <= MAXSEQNUM);
@@ -215,8 +223,9 @@ void setSYN(uint8_t* flags);
 void resetFLAG(uint8_t* flags);
 void initConn(struct Header*h);
 int logging(int, struct Header*, int cwnd, int ssthresh);
+bool seqnum_comp(Packet a, Packet b);
 int cnct_server(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
-int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int);
+int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int, CongestionControl);
 int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
 int cls_resp1(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);
 int cls_resp2(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string.h>
 #include <stdlib.h>
+#include <cstdio>
 #include <bits/stdc++.h>
 #include <csignal>
 #include <sys/poll.h>
@@ -104,9 +105,21 @@ int main(int argvc, char** argv)
     cnct_server(sockfd, buffer, &h, payload, &c_addr, &len);
     connected = true;
     fname = std::to_string(++fileID) + ".file";
-    fout.open(fname);
+    fout.open(fname, std::ios::binary | std::ios::ate | std::ios::trunc);
+    //fout << "This is a test/n";
+    //fout.flush();
     std::cout << "Packet Received" << std::endl;
     fout << payload;
+    std::cout<<std::string(payload)<<std::endl;
+    fout.flush();
+    Header h_ack;
+    setACK(&h_ack.flags);
+    h_ack.acknum = (h.seqnum + sizeof(payload)) % MAXSEQNUM; 
+    h_ack.seqnum = MSS % MAXSEQNUM;
+    writePacket(&h_ack, payload, 0, buffer);
+    sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+    logging(SEND, &h_ack, 0, 0);
+
     while ( (pret = poll(ufd, 1, RTO)) > 0){
         if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
             (struct sockaddr*) &c_addr, &len) != -1){
@@ -125,10 +138,73 @@ int main(int argvc, char** argv)
             else{
                 std::cout << "Packet Received" << std::endl;
                 fout << payload;   
+                //std::cout<<std::string(payload)<<std::endl;
+                fout.flush();
+            /**********************FILE RECEIVING STARTS HERE************************/
+
+            // Create the buffer we'll read into and send over socket
+            char incoming[MSS];
+            memset(incoming, 0, MSS);
+            char outgoing[MSS];
+            memset(outgoing, 0, MSS);
+
+            //Initialize some constants
+            int recv_bytes = 0;
+            Packet* recv_p = NULL;
+            std::list<Packet> buffered_p;
+            uint16_t acknum = (h.acknum + 1) % MAXSEQNUM;
+            uint16_t seqnum = (h.seqnum + 1) % MAXSEQNUM;
+
+            // Else store the packet in an object
+            Packet* new_p = new Packet(&h, payload);
+
+            // Is it the packet we expected?
+            if (new_p->h_acknum() == acknum){
+              fout << payload;
+              std::cout<<std::string(payload)<<std::endl;
+              acknum += PAYLOAD % MAXSEQNUM ;
+              // Send ack for packet
+              Header ack_header;
+              ack_header.acknum = acknum;
+              ack_header.seqnum = seqnum;
+              int ack_len = HEADERSIZE;
+              writePacket(&ack_header, payload, 0, outgoing);
+              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+              logging(SEND, &ack_header, 0, 0);
+
+              // Do any of the buffered packets now fall in order?
+              std::list<Packet>::const_iterator npb = buffered_p.begin();
+              while(npb != buffered_p.end()){
+                while (!buffered_p.empty() && npb->h_acknum() == acknum){
+                    fout << payload; 
+                    buffered_p.erase(npb);
+                    acknum += MSS % MAXSEQNUM ;
+                    npb++;
+                  }
+              }
             }
+            else{
+              // We didn't receive the right packet
+
+              // Save it in a buffer, sort the buffer
+              buffered_p.push_back(*new_p);
+              buffered_p.sort(seqnum_comp);
+
+              // Send the same ack as before, mark item as a duplicate packet
+              Header ack_header;
+              ack_header.acknum = acknum;
+              ack_header.seqnum=seqnum;
+              ack_header.dup = true; 
+              int ack_len = HEADERSIZE;
+              writePacket(&ack_header, payload, 0, outgoing);
+              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+              logging(SEND, &ack_header, 0, 0);
+            }
+          }
+        }
+            /**********************FILE RECEIVING ENDS HERE**************************/
             /************************************************************************/
         }
-    }
     if (pret == -1) perror("polling failed");
     else if (pret == 0 & connected == true){
         std::cout<<"Timeout occurred! close connection!"<<std::endl;
