@@ -47,6 +47,7 @@ int main(int argvc, char** argv) {
         perror("ERROR: file not exists");
         exit(1);
     }
+    //wait_cls(2);
     h.acknum = h.seqnum + 1;
     h.seqnum = MSS;
     h.flags = 0;

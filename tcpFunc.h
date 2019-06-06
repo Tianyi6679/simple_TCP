@@ -21,6 +21,7 @@
 #define PAYLOAD 512
 #define RTO 10000
 #define WaitCLS 2000
+#define RET_TO 500
 /* TODO change either cwnd or dest_port (won't use them at all) to indicate duplicate */
 struct Header{
     uint16_t dest_port;

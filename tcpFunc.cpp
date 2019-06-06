@@ -78,8 +78,8 @@ void initConn(struct Header* h, int port){
 }
 
 int cnct_server(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* c_addr, socklen_t* len){
-    bool connected = false;
-    while (!connected){
+    bool handshake = false;
+    while (!handshake){
         recvfrom(sockfd,(char *)buffer, MSS, MSG_WAITALL, (struct sockaddr*)c_addr, len);
         readPacket(h, payload, 0, buffer);
         logging(RECV, h, 0, 0);
@@ -88,88 +88,124 @@ int cnct_server(int sockfd, char* buffer, struct Header* h, char* payload, struc
             h->acknum = h->seqnum + 1;
             h->seqnum = 0;
             setACK(&(h->flags));
-            connected = true;
+            handshake = true;
         }     
     }
-    writePacket(h, payload, 0, buffer);
-    sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)c_addr, *len);
-    logging(SEND, h, 0, 0);
+    struct pollfd ufd[1];
+    ufd[0].fd = sockfd;
+    ufd[0].events = POLLIN;
+    int pret;
+    int timeout = RET_TO;
+    Timer t; 
+    bool connected = false;
+    struct Header h2;
+    //wait_cls(2);
+    do{
+        writePacket(h, payload, 0, buffer);
+        sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)c_addr, *len);
+        logging(SEND, h, 0, 0);
+        t.start();
+        timeout = RET_TO;
+        while(poll(ufd, 1, timeout) > 0){
+            recvfrom(sockfd, buffer, MSS, MSG_WAITALL, (struct sockaddr*)c_addr, len);
+            readPacket(&h2, payload, PAYLOAD, buffer);
+            logging(RECV, &h2, 0, 0);
+            if (getACK(h2.flags) && h2.acknum == h->seqnum + 1){
+                connected = true;
+                break;
+            }
+            if ( (timeout = RET_TO - t.elapsed()) <= 0) break;
+        }
+    } while(!connected);
+    std::memcpy(h, &h2, sizeof(struct Header));
     //std::cout<<"Connection Established "<<((struct sockaddr_in*)c_addr)->sin_port<<" "<<((struct sockaddr_in*)c_addr)->sin_addr.s_addr<<std::endl;
     return 0;
 }
 
 int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* servaddr, socklen_t* len, int port){
     //step 1
-    initConn(h,port);
-    writePacket(h, payload, 0, buffer);
-    sendto(sockfd, (const char *)buffer, MSS, 
-        MSG_CONFIRM, (const struct sockaddr *) servaddr,  
-            sizeof(*servaddr)); 
-    logging(SEND, h, h->cwnd, 0);
-    //std::cout << "Send SYN" <<std::endl;
-    // step 2
-    bool connected = false;
-    while(!connected){
-        recv(sockfd,(char *)buffer, MSS, 0);
-        readPacket(h, payload, 0, buffer);
-        logging(RECV, h, h->cwnd, 0);
-        if (getSYN(h->flags) && getACK(h->flags) && h->acknum == 1){
-            //std::cout<<"ACK received"<<std::endl;
-            connected = true;
-        }
-        else{
-            initConn(h,port);
-            writePacket(h, payload, 0, buffer);
-            sendto(sockfd, (const char *)buffer, MSS, 
-                    MSG_CONFIRM, (const struct sockaddr *) servaddr,  
-                    sizeof(*servaddr)); 
-            logging(SEND, h, h->cwnd, 0);
-            //std::cout << "Resend SYN" <<std::endl;
-        }
-    }
-    // step 3
-    std::cout<<"Connection Established"<<std::endl;
-    if (connect(sockfd, (struct sockaddr *) servaddr, sizeof(*servaddr)) == -1){
-        perror("ERROR: connect failed");
-        exit(1);
-    }
-    return 0;
-}
-/* actions of initiating a close request */
-int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, socklen_t* len){
-    resetFLAG(&(h->flags));
-    setFIN(&(h->flags));
-    h->acknum = 0;
-    writePacket(h, payload, 0, buffer);
-    sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
-    logging(SEND, h, 0, 0);
-    //w8 for ack
-    int expectack= h->seqnum + 1;
-    //std::cout << "Close Request Sent!" << std::endl;
-    while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
-        readPacket(h, payload, 0, buffer);
-        logging(RECV, h, 0, 0);
-        if (getACK(h->flags) && h->acknum == expectack ){
-            break;
-        }
-    }
-    //std::cout << "Receive first ACK" << std::endl;
-    /* wait for the other party sending FIN */
     struct pollfd ufd[1];
     ufd[0].fd = sockfd;
     ufd[0].events = POLLIN;
     int pret;
-    int timeout = WaitCLS;
+    int timeout = RET_TO;
     Timer t; 
+    bool connected = false;
+    do{
+        initConn(h,port);
+        writePacket(h, payload, 0, buffer);
+        sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)servaddr, sizeof(*servaddr));
+        logging(SEND, h, 0, 0);
+        t.start();
+        timeout = RET_TO;
+        while(poll(ufd, 1, timeout) > 0){
+            recv(sockfd,(char *)buffer, MSS, 0);
+            readPacket(h, payload, 0, buffer);
+            logging(RECV, h, h->cwnd, 0);
+            if (getSYN(h->flags) && getACK(h->flags) && h->acknum == 1){
+            //std::cout<<"ACK received"<<std::endl;
+                connected = true;
+                std::cout<<"Connection Established"<<std::endl;
+                if (connect(sockfd, (struct sockaddr *) servaddr, sizeof(*servaddr)) == -1){
+                    perror("ERROR: connect failed");
+                    exit(1);
+                }
+                break;
+            }
+            if ( (timeout = RET_TO - t.elapsed()) <= 0) break;
+        }
+    } while(!connected);
+    //std::cout << "Send SYN" <<std::endl;
+    // step 2
+    return 0;
+}
+/* actions of initiating a close request */
+int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, socklen_t* len){
+    
+    struct pollfd ufd[1];
+    ufd[0].fd = sockfd;
+    ufd[0].events = POLLIN;
+    int pret;
+    int timeout = RET_TO;
+    Timer t; 
+    bool Fin_Ack = false;
+    struct Header h2;
+    resetFLAG(&(h->flags));
+    setFIN(&(h->flags));
+    h->acknum = 0;
+    int expectack= h->seqnum + 1;
+    do {
+        writePacket(h, payload, 0, buffer);
+        sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+        logging(SEND, h, 0, 0);
+        //std::cout << "Close Request Sent!" << std::endl;
+        t.start();
+        while(poll(ufd, 1, timeout) > 0){
+            recv(sockfd, (char*)buffer, MSS, 0);
+            readPacket(&h2, payload, 0, buffer);
+            logging(RECV, &h2, 0, 0);
+            if (getACK(h2.flags) && h2.acknum == expectack ){
+                Fin_Ack = true;
+                break;
+            }
+            if ( (timeout = RET_TO - t.elapsed()) <= 0) break;
+        }
+    } while(!Fin_Ack);
+    //std::cout << "Receive first ACK" << std::endl;
+    //wait_cls(2);
+    /* wait for the other party sending FIN */
     t.start();
+    timeout = WaitCLS;
+    /* WAIT_CLS for 2 sec */
     while(poll(ufd, 1, timeout) > 0){
         recv(sockfd, (char*)buffer, MSS, 0);
         readPacket(h, payload, 0, buffer);
-        logging(RECV, h, 0, 0);
         if (getFIN(h->flags)){
+            logging(RECV, h, 0, 0);
             resetFLAG(&(h->flags));
             setACK(&(h->flags));
             h->acknum = h->seqnum + 1;
+            h->seqnum = expectack;
             writePacket(h, payload, 0, buffer);
             sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
             logging(SEND, h, 0, 0);
@@ -196,22 +232,40 @@ int cls_resp1(int sockfd, char* buffer, struct Header* h, char* payload, struct 
 }
 /* actions of sending last ACK and wait for closing */
 int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, uint16_t seqnum){
+    struct pollfd ufd[1];
+    ufd[0].fd = sockfd;
+    ufd[0].events = POLLIN;
+    int pret;
+    int timeout = RET_TO;
+    Timer t; 
     resetFLAG(&(h->flags));
     setFIN(&(h->flags));
     h->seqnum = seqnum;
     h->acknum = 0;
-    writePacket(h, payload, 0, buffer);
-    sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
-    logging(SEND, h, 0, 0);
-    //std::cout<<"Send Second Fin" << std::endl;
-    while(recv(sockfd, (char*)buffer, MSS, 0) > 0){
-        readPacket(h, payload, 0, buffer);
-        logging(RECV, h, 0, 0);
-        if (getACK(h->flags) && h->acknum == seqnum + 1){
-            //std::cout<<"Receive ACK to Second FIN"<<std::endl;
-            break;
+    bool Fin_Ack = false;
+    struct Header h2;
+    do{
+        writePacket(h, payload, 0, buffer);
+        sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+        logging(SEND, h, 0, 0);
+        //std::cout<<"Send Second Fin" << std::endl;
+        t.start();
+        while( poll(ufd, 1, timeout) > 0){
+            recv(sockfd, (char*)buffer, MSS, 0);
+            readPacket(&h2, payload, 0, buffer);
+            logging(RECV, &h2, 0, 0);
+            if (getACK(h2.flags) && h2.acknum == h->seqnum + 1){
+                //std::cout<<"Receive ACK to Second FIN"<<std::endl;
+                Fin_Ack = true;
+                break;
+            }
+            else if (getFIN(h2.flags)){
+                cls_resp1(sockfd, buffer, &h2, payload, addr, seqnum);
+            }
+            if ((timeout = RET_TO - t.elapsed()) <= 0) break;
         }
-    }
+    }while(!Fin_Ack);
+    
     return 0;
 }
 /* Right now only put this thread into sleep for 2 secs */

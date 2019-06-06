@@ -105,6 +105,8 @@ int main(int argvc, char** argv)
     connected = true;
     fname = std::to_string(++fileID) + ".file";
     fout.open(fname);
+    std::cout << "Packet Received" << std::endl;
+    fout << payload;
     while ( (pret = poll(ufd, 1, RTO)) > 0){
         if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
             (struct sockaddr*) &c_addr, &len) != -1){
@@ -112,6 +114,7 @@ int main(int argvc, char** argv)
             logging(RECV, &h, 0, 0);
             /************************************************************************/
             if (getFIN(h.flags)){
+                //wait_cls(2);
                 cls_resp1(sockfd, buffer, &h, payload, &c_addr, 2);
                 cls_resp2(sockfd, buffer, &h, payload, &c_addr, 2);
                 connected = false;
