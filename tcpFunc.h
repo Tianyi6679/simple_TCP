@@ -22,7 +22,7 @@
 #define PAYLOAD 512
 #define RTO 10000
 #define WaitCLS 2000
-#define RET_TO 5000
+#define RET_TO 500
 /* TODO change either cwnd or dest_port (won't use them at all) to indicate duplicate */
 struct Header{
     uint16_t dest_port;
@@ -214,7 +214,7 @@ int logging(int, struct Header*, int cwnd, int ssthresh);
 bool seqnum_comp(Packet a, Packet b);
 int cnct_server(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
 int cnct_client(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, int, CongestionControl);
-int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*);
+int cls_init(int, char*, struct Header*, char*, struct sockaddr_in*, socklen_t*, uint16_t);
 int cls_resp1(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);
 int cls_resp2(int, char*, struct Header*, char*, struct sockaddr_in*, uint16_t);
 int wait_cls(int);

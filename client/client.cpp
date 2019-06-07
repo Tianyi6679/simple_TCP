@@ -104,6 +104,7 @@ int main(int argvc, char** argv) {
     // Until we're done reading
     bool first_packet = true;
     while (!reach_eof){
+        
         if (debug){
             std::cout << "Reading!\n";
         }
@@ -165,6 +166,10 @@ int main(int argvc, char** argv) {
         
         rto.start();
         int time_left = RET_TO;
+        if ((sock_event = poll(s_poll, 1, RTO)) == 0) {
+            perror("Connection Abort!");
+            exit(1);
+        }
         while ((sock_event = poll(s_poll, 1, time_left)) > 0){
             if (s_poll[0].revents & POLLIN){
                 /*Receive Packet*/
@@ -225,8 +230,8 @@ int main(int argvc, char** argv) {
 
                         
     /************************************************************************/
-    if (cls_init(sockfd, buffer, &h, payload, &servaddr, &len) == -1){
-        perror("Connection abort!");
+    if (cls_init(sockfd, buffer, &h, payload, &servaddr, &len, seqnum) == -1){
+        perror("Connection Abort!");
         exit(1);
     }
     

@@ -166,7 +166,7 @@ int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struc
     return 0;
 }
 /* actions of initiating a close request */
-int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, socklen_t* len){
+int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct sockaddr_in* addr, socklen_t* len, uint16_t seqnum){
     
     struct pollfd ufd[1];
     ufd[0].fd = sockfd;
@@ -179,6 +179,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
     resetFLAG(&(h->flags));
     setFIN(&(h->flags));
     h->acknum = 0;
+    h->seqnum = seqnum;
     int expectack= h->seqnum + 1;
     int sendTimes = 0;
     do {
@@ -252,6 +253,7 @@ int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct 
     h->acknum = 0;
     bool Fin_Ack = false;
     struct Header h2;
+    int trial  = 0;
     do{
         writePacket(h, payload, 0, buffer);
         sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
@@ -272,6 +274,7 @@ int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct 
             }
             if ((timeout = RET_TO - t.elapsed()) <= 0) break;
         }
+        if (++trial >= 5) return -1;
     }while(!Fin_Ack);
     
     return 0;
