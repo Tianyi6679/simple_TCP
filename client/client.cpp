@@ -55,9 +55,12 @@ int main(int argvc, char** argv) {
         perror("ERROR: file not exists");
         exit(1);
     }
+
     h.acknum = h.seqnum + 1;
     h.seqnum = 1;
     h.flags = 0;
+    std::streamsize count = fin.gcount();
+    h.len = count;
     setACK(&(h.flags));
     writePacket(&h, payload, PAYLOAD, buffer);
     send(sockfd, (const char *)buffer, MSS, 0); 
@@ -78,7 +81,7 @@ int main(int argvc, char** argv) {
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
     Timer rto;
-    uint16_t seqnum = h.seqnum;
+    uint16_t seqnum = h.seqnum + PAYLOAD;
     uint16_t cwnd = MSS;
     std::list<Packet> unacked_p;
     int bytes_read = 0;
@@ -97,6 +100,7 @@ int main(int argvc, char** argv) {
     s_poll[0].fd = sockfd;
     s_poll[0].events = POLLIN;
     int time_left = RET_TO;
+    int no_dup = 0;
 
     // Until we're done reading
     bool first_packet = true;
@@ -106,6 +110,7 @@ int main(int argvc, char** argv) {
         }
         
         if (!first_packet){
+            // Send all the unsent packets
             std::list<Packet>::iterator packet_iter = unacked_p.begin();
             while(packet_iter!=unacked_p.end()){
                 if (packet_iter->h_seqnum() <= seqnum){
@@ -115,6 +120,7 @@ int main(int argvc, char** argv) {
                     writePacket(&out_header, out_payload, out_len, resp_buffer);
                     send(sockfd, (const char *)resp_buffer, MSS, 0); 
                     logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                    seqnum += PAYLOAD % MAXSEQNUM;
                 }
                 packet_iter++;
             }
@@ -148,13 +154,13 @@ int main(int argvc, char** argv) {
             new_header.seqnum = seqnum;
             seqnum += count % MAXSEQNUM;
             new_header.acknum = 0;
+            new_header.len = count;
             resetFLAG(&(new_header.flags));
             Packet p(&new_header, p_buff);
             unacked_p.push_back(p);
             bytes_read += count;
         }
 
-        // Send all the unsent packets
         int sock_event = 0;
 
         rto.start();
@@ -167,6 +173,15 @@ int main(int argvc, char** argv) {
                 if (recv_count = recv(sockfd, (char *)recv_buff, BUFFERSIZE, 0) != -1){
                         readPacket(&recv_h, payload, 0, recv_buff);
                         logging(RECV, &recv_h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                        //Is it a duplicate?
+                        if (recv_h.dup){
+                            std::cout << "Got a duplicate ACK! \n";
+                            no_dup ++;
+                            if (no_dup > 2){
+                                congestion_manager.fast_retransmit_start();
+                            }
+                            break;
+                        }
                         /*Were we expecting this ack num?*/
                         std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
                         uint16_t recv_ack = recv_h.acknum;
@@ -178,6 +193,8 @@ int main(int argvc, char** argv) {
                                 unacked_p.erase(packet_iter);
                                 // Update ssthresh and cwnd
                                 congestion_manager.update();
+                                // Reset number of duplicates to 0
+                                no_dup = 0;
                                 break;
                             }
                             else{
