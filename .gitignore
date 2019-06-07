@@ -1,3 +1,5 @@
 *.o
 *.file
 test.*
+server
+client
