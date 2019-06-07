@@ -21,11 +21,11 @@ void signalHandler(int signum){
     }
     switch (signum){
         case SIGQUIT:
-            std::cout<< " Interrupt signal SIGQUIT received." <<std::endl;
+            //std::cout<< " Interrupt signal SIGQUIT received." <<std::endl;
             signum = 0;
             break;
         case SIGTERM:
-            std::cout<< " Interrupt signal SIGTERM received." <<std::endl;
+            //std::cout<< " Interrupt signal SIGTERM received." <<std::endl;
             signum = 0;
             break;
         default:
@@ -111,9 +111,9 @@ int main(int argvc, char** argv)
     fout.open(fname, std::ios::binary | std::ios::ate | std::ios::trunc);
     //fout << "This is a test/n";
     //fout.flush();
-    std::cout << "Packet Received" << std::endl;
-    fout << payload;
-    std::cout<<std::string(payload)<<std::endl;
+    //std::cout << "Packet Received" << std::endl;
+    fout.write(payload, h.len);
+    //std::cout<<std::string(payload)<<std::endl;
     struct Header h_ack;
     resetFLAG(&(h_ack.flags));
     setACK(&(h_ack.flags));
@@ -140,7 +140,7 @@ int main(int argvc, char** argv)
                 break;
             }
             else{
-                std::cout << "Packet Received" << std::endl;                
+                //std::cout << "Packet Received" << std::endl;                
                 char incoming[MSS];
                 memset(incoming, 0, MSS);
                 char outgoing[MSS];
@@ -149,8 +149,8 @@ int main(int argvc, char** argv)
                 // right packet 
                 if (h.seqnum == acknum){
                   // Send ack for packet
-                  fout << payload;
-                  std::cout<<std::string(payload)<<std::endl; 
+                  fout.write(payload, h.len);
+                  //std::cout<<std::string(payload)<<std::endl; 
                   
                   Header ack_header;
                   resetFLAG(&(ack_header.flags));
@@ -165,8 +165,8 @@ int main(int argvc, char** argv)
                   std::list<Packet>::iterator npb = buffered_p.begin();
                   while(npb != buffered_p.end()){
                     if (npb->h_seqnum() == acknum){
-                        fout << npb->p_payload();
-                        std::cout<<std::string(npb->p_payload())<<std::endl; 
+                        fout.write(npb->p_payload(), npb->payload_len());
+                        //std::cout<<std::string(npb->p_payload())<<std::endl; 
                         acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
                         buffered_p.erase(npb);
                     }
@@ -200,16 +200,16 @@ int main(int argvc, char** argv)
     }
     if (pret == -1) perror("polling failed");
     else if (pret == 0 & connected == true){
-        std::cout<<"Timeout occurred! close connection!"<<std::endl;
+        //std::cout<<"Timeout occurred! close connection!"<<std::endl;
         if (cls_init(sockfd, buffer, &h, payload, &c_addr, &len) == -1)
         {
-            std::cout<<"Force Close Connection!"<<std::endl;
+            perror("Connection Abort!");
         }
     }
     fout.close();
-    std::cout << "Done!" << std::endl;
+    //std::cout << "Done!" << std::endl;
     connected = false;
-    std::cout << "Close Connection to Client!" << std::endl;
+    //std::cout << "Close Connection to Client!" << std::endl;
   }
   close(sockfd);
   return 0;

@@ -151,7 +151,7 @@ int cnct_client(int sockfd, char* buffer, struct Header* h, char* payload, struc
             if (getSYN(h->flags) && getACK(h->flags) && h->acknum == 1){
             //std::cout<<"ACK received"<<std::endl;
                 connected = true;
-                std::cout<<"Connection Established"<<std::endl;
+                //std::cout<<"Connection Established"<<std::endl;
                 if (connect(sockfd, (struct sockaddr *) servaddr, sizeof(*servaddr)) == -1){
                     perror("ERROR: connect failed");
                     exit(1);
@@ -222,7 +222,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
         if ( (timeout = WaitCLS - t.elapsed()) <= 0) break;  
     }
     t.stop();
-    std::cout<<"Wait Close ends"<<std::endl;
+    //std::cout<<"Wait Close ends"<<std::endl;
     return 0;     
 }
 /* actions of respond to a close request */

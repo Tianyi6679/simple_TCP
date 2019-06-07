@@ -34,7 +34,7 @@ int main(int argvc, char** argv) {
     socklen_t len;
     struct Header h;
     char payload[PAYLOAD];
-    std::cout<<sizeof(payload)<<' '<<sizeof(struct Header)<<std::endl;
+    //std::cout<<sizeof(payload)<<' '<<sizeof(struct Header)<<std::endl;
     
     memset(payload, '\0', sizeof(payload));
     // Def congestion manager
@@ -76,7 +76,7 @@ int main(int argvc, char** argv) {
     char recv_buff[BUFFERSIZE];
     memset(recv_buff, 0, BUFFERSIZE);
     // for debugging
-    bool debug = true;
+    bool debug = false;
     //wait_cls(2);
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
@@ -89,7 +89,7 @@ int main(int argvc, char** argv) {
 
     // Add first packet to list
     if (debug){
-    std::cout << "Initializing List!\n";
+        std::cout << "Initializing List!\n";
     } 
     Packet p(&h, payload);
     unacked_p.push_back(p);
@@ -154,13 +154,13 @@ int main(int argvc, char** argv) {
             Packet p(&new_header, p_buff);
             unacked_p.push_back(p);
             bytes_read += count;
-            p.printPack();
+            //p.printPack();
             writePacket(&new_header, p_buff, count, resp_buffer);
             send(sockfd, (const char *)resp_buffer, MSS, 0); 
             logging(SEND, &new_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
-            std::cout<<bytes_read<<std::endl;
+            //std::cout<<bytes_read<<std::endl;
         }
-        wait_cls(1);
+        //wait_cls(1);
         int sock_event = 0;
         
         rto.start();
@@ -176,7 +176,7 @@ int main(int argvc, char** argv) {
                         logging(RECV, &recv_h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
                         //Is it a duplicate?
                         if (recv_h.dup){
-                            std::cout << "Got a duplicate ACK! \n";
+                            //std::cout << "Got a duplicate ACK! \n";
                             no_dup ++;
                             if (no_dup > 2){
                                 congestion_manager.fast_retransmit_start();
