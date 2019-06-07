@@ -109,7 +109,7 @@ public:
     }
 
     int get_cwnd() const{
-        return m_cwnd;
+        return m_cwnd/512 * 512;
     }
 
     int get_ssthresh() const{
@@ -123,18 +123,21 @@ public:
     void update(){
         if (m_mode == 0){
             if (m_cwnd < m_ssthresh){
-                m_cwnd = std::min(m_cwnd + 512, max_cwnd);
+                m_cwnd += 512;
             }
             else{
                 change_mode(1);
-                m_cwnd = std::min(m_cwnd + 512 * ((512*512) / m_cwnd), max_cwnd);
+                m_cwnd += (512*512) / m_cwnd;
             }
         }
         else if (m_mode == 1){
-            m_cwnd = std::min(512* ((512*512) / m_cwnd), max_cwnd);
+            m_cwnd += (512*512) / m_cwnd;
         }
         else{
-            m_cwnd = std::min(m_cwnd + 512, max_cwnd);
+            m_cwnd += 512;
+        }
+        if (m_cwnd > max_cwnd){
+          m_cwnd = max_cwnd;
         }
     }
 
