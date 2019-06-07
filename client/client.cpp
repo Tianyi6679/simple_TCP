@@ -56,7 +56,7 @@ int main(int argvc, char** argv) {
         exit(1);
     }
     h.acknum = h.seqnum + 1;
-    h.seqnum = PAYLOAD;
+    h.seqnum = 1;
     h.flags = 0;
     setACK(&(h.flags));
     writePacket(&h, payload, PAYLOAD, buffer);
@@ -99,10 +99,28 @@ int main(int argvc, char** argv) {
     int time_left = RET_TO;
 
     // Until we're done reading
+    bool first_packet = true;
     while (!reach_eof){
         if (debug){
             std::cout << "Reading!\n";
         }
+        
+        if (!first_packet){
+            std::list<Packet>::iterator packet_iter = unacked_p.begin();
+            while(packet_iter!=unacked_p.end()){
+                if (packet_iter->h_seqnum() <= seqnum){
+                    Header out_header = packet_iter->p_header();
+                    char* out_payload = packet_iter->p_payload();
+                    int out_len = packet_iter->payload_len();
+                    writePacket(&out_header, out_payload, out_len, resp_buffer);
+                    send(sockfd, (const char *)resp_buffer, MSS, 0); 
+                    logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                }
+                packet_iter++;
+            }
+        }
+        else first_packet = false;
+        
         while(bytes_read < congestion_manager.get_cwnd()){
             fin.read(p_buff, PAYLOAD);
             // How many bytes did we actually read?
@@ -127,8 +145,8 @@ int main(int argvc, char** argv) {
             } 
             struct Header new_header;
             // Update seqnum
-            seqnum += count % MAXSEQNUM;
             new_header.seqnum = seqnum;
+            seqnum += count % MAXSEQNUM;
             new_header.acknum = 0;
             resetFLAG(&(new_header.flags));
             Packet p(&new_header, p_buff);
@@ -137,18 +155,6 @@ int main(int argvc, char** argv) {
         }
 
         // Send all the unsent packets
-        std::list<Packet>::iterator packet_iter = unacked_p.begin();
-        while(packet_iter!=unacked_p.end()){
-            if (packet_iter->h_seqnum() <= seqnum){
-                Header out_header = packet_iter->p_header();
-                char* out_payload = packet_iter->p_payload();
-                int out_len = packet_iter->payload_len();
-                writePacket(&out_header, out_payload, out_len, resp_buffer);
-                send(sockfd, (const char *)resp_buffer, MSS, 0); 
-                logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
-            }
-            packet_iter++;
-        }
         int sock_event = 0;
 
         rto.start();

@@ -100,9 +100,12 @@ int main(int argvc, char** argv)
   ufd[0].events = POLLIN;
   int pret;
   int fileID = 0;
+  uint16_t seqnum = 0;
+  uint16_t acknum = 0;
   while (1){
     /* three-way-handshake */  
     cnct_server(sockfd, buffer, &h, payload, &c_addr, &len);
+    seqnum = 1;
     connected = true;
     fname = std::to_string(++fileID) + ".file";
     fout.open(fname, std::ios::binary | std::ios::ate | std::ios::trunc);
@@ -116,7 +119,7 @@ int main(int argvc, char** argv)
     setACK(&(h_ack.flags));
     //std::cout<<sizeof(payload)<<' '<<h.seqnum<<std::endl;
     h_ack.acknum = (h.seqnum + sizeof(payload)) % MAXSEQNUM; 
-    h_ack.seqnum = MSS % MAXSEQNUM;
+    h_ack.seqnum = ++seqnum;
     writePacket(&h_ack, payload, 0, buffer);
     sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
     logging(SEND, &h_ack, 0, 0);
@@ -126,88 +129,82 @@ int main(int argvc, char** argv)
             (struct sockaddr*) &c_addr, &len) != -1){
             readPacket(&h, payload, PAYLOAD, buffer);
             logging(RECV, &h, 0, 0);
-            /************************************************************************/
+            
             if (getFIN(h.flags)){
                 //wait_cls(2);
-                cls_resp1(sockfd, buffer, &h, payload, &c_addr, 2);
-                cls_resp2(sockfd, buffer, &h, payload, &c_addr, 2);
+                cls_resp1(sockfd, buffer, &h, payload, &c_addr, seqnum);
+                cls_resp2(sockfd, buffer, &h, payload, &c_addr, seqnum);
                 connected = false;
                 break;
             }
             else{
-                std::cout << "Packet Received" << std::endl;
-                fout << payload;   
+                std::cout << "Packet Received" << std::endl; 
                 //std::cout<<std::string(payload)<<std::endl;
-                fout.flush();
-            /**********************FILE RECEIVING STARTS HERE************************/
+                // Create the buffer we'll read into and send over socket
+                
+                char incoming[MSS];
+                memset(incoming, 0, MSS);
+                char outgoing[MSS];
+                memset(outgoing, 0, MSS);
 
-            // Create the buffer we'll read into and send over socket
-            char incoming[MSS];
-            memset(incoming, 0, MSS);
-            char outgoing[MSS];
-            memset(outgoing, 0, MSS);
+                //Initialize some constants
+                int recv_bytes = 0;
+                Packet* recv_p = NULL;
+                std::list<Packet> buffered_p;
+                
+                // Else store the packet in an object
+                
+                Packet* new_p = new Packet(&h, NULL);
 
-            //Initialize some constants
-            int recv_bytes = 0;
-            Packet* recv_p = NULL;
-            std::list<Packet> buffered_p;
-            uint16_t acknum = (h.acknum + 1) % MAXSEQNUM;
-            uint16_t seqnum = (h.seqnum + 1) % MAXSEQNUM;
+                // Is it the packet we expected?
+                if (new_p->h_acknum() == acknum){
+                  fout << payload;
+                  std::cout<<std::string(payload)<<std::endl;
+                  // Send ack for packet
+                  Header ack_header;
+                  resetFLAG(&(ack_header.flags));
+                  setACK(&(ack_header.flags));
+                  ack_header.acknum = (h.seqnum + sizeof(payload)) % MAXSEQNUM;
+                  ack_header.seqnum = (++seqnum % MAXSEQNUM);
+                  writePacket(&ack_header, payload, 0, outgoing);
+                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+                  logging(SEND, &ack_header, 0, 0);
 
-            // Else store the packet in an object
-            Packet* new_p = new Packet(&h, payload);
-
-            // Is it the packet we expected?
-            if (new_p->h_acknum() == acknum){
-              fout << payload;
-              std::cout<<std::string(payload)<<std::endl;
-              acknum += PAYLOAD % MAXSEQNUM ;
-              // Send ack for packet
-              Header ack_header;
-              resetFLAG(&(ack_header.flags));
-              setACK(&(ack_header.flags));
-              ack_header.acknum = acknum;
-              ack_header.seqnum = seqnum;
-              int ack_len = HEADERSIZE;
-              writePacket(&ack_header, payload, 0, outgoing);
-              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-              logging(SEND, &ack_header, 0, 0);
-
-              // Do any of the buffered packets now fall in order?
-              std::list<Packet>::const_iterator npb = buffered_p.begin();
-              while(npb != buffered_p.end()){
-                while (!buffered_p.empty() && npb->h_acknum() == acknum){
-                    fout << payload; 
-                    buffered_p.erase(npb);
-                    acknum += MSS % MAXSEQNUM ;
-                    npb++;
+                  // Do any of the buffered packets now fall in order?
+                  std::list<Packet>::const_iterator npb = buffered_p.begin();
+                  while(npb != buffered_p.end()){
+                    while (!buffered_p.empty() && npb->h_acknum() == acknum){
+                        fout << payload; 
+                        buffered_p.erase(npb);
+                        acknum += MSS % MAXSEQNUM ;
+                        npb++;
+                      }
                   }
-              }
-            }
-            else{
-              // We didn't receive the right packet
+                }
+                else{
+                  // We didn't receive the right packet
 
-              // Save it in a buffer, sort the buffer
-              buffered_p.push_back(*new_p);
-              buffered_p.sort(seqnum_comp);
+                  // Save it in a buffer, sort the buffer
+                  buffered_p.push_back(*new_p);
+                  buffered_p.sort(seqnum_comp);
 
-              // Send the same ack as before, mark item as a duplicate packet
-              Header ack_header;
-              resetFLAG(&(ack_header.flags));
-              setACK(&(ack_header.flags));
-              ack_header.acknum = acknum;
-              ack_header.seqnum=seqnum;
-              ack_header.dup = (uint16_t)true; 
-              int ack_len = HEADERSIZE;
-              writePacket(&ack_header, payload, 0, outgoing);
-              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-              logging(SEND, &ack_header, 0, 0);
+                  // Send the same ack as before, mark item as a duplicate packet
+                  Header ack_header;
+                  resetFLAG(&(ack_header.flags));
+                  setACK(&(ack_header.flags));
+                  ack_header.acknum = acknum;
+                  ack_header.seqnum= seqnum;
+                  ack_header.dup = (uint16_t)true; 
+                  int ack_len = HEADERSIZE;
+                  writePacket(&ack_header, payload, 0, outgoing);
+                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+                  logging(SEND, &ack_header, 0, 0);
+                }
             }
-          }
         }
             /**********************FILE RECEIVING ENDS HERE**************************/
             /************************************************************************/
-        }
+    }
     if (pret == -1) perror("polling failed");
     else if (pret == 0 & connected == true){
         std::cout<<"Timeout occurred! close connection!"<<std::endl;
