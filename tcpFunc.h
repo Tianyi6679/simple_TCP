@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <algorithm>
+#include <iostream>
 #define BUFFERSIZE 5240
 #define HEADERSIZE 12
 #define MSS 524
@@ -21,7 +22,7 @@
 #define PAYLOAD 512
 #define RTO 10000
 #define WaitCLS 2000
-#define RET_TO 500
+#define RET_TO 5000
 /* TODO change either cwnd or dest_port (won't use them at all) to indicate duplicate */
 struct Header{
     uint16_t dest_port;
@@ -148,34 +149,15 @@ private:
 
 class Packet {
 public:
-  Packet(uint16_t dest_port, uint16_t seqnum, uint16_t acknum, uint16_t dup, char* data, int len, uint8_t flags) {
-    header.dest_port = dest_port;
-    header.seqnum = seqnum;
-    header.acknum = acknum;
-    header.dup = dup;
-    header.flags = flags;
-    memset(payload, 0, MSS);
-    if (len > MSS) {
-      fprintf(stderr, "Error creating packet: Payload larger than MSS.\n");
-      exit(-1);
-    } else {
-      header.len = len;
-    }
-    if (payload  != NULL) {
-      memcpy(payload, data, len);
-    } else {
-      fprintf(stderr, "Payload is empty\n");
-      exit(-1);
-    }
-  }
   Packet(struct Header* in_h, char* in_payload){
     memset(payload, 0, MSS);
     memcpy(payload, in_payload, MSS);
-    header.dest_port = in_h->dest_port;
-    header.seqnum = in_h->seqnum;
-    header.acknum = in_h->acknum;
-    header.dup = in_h->dup;
-    header.flags = in_h->flags;
+    this->header.dest_port = in_h->dest_port;
+    this->header.seqnum = in_h->seqnum;
+    this->header.acknum = in_h->acknum;
+    this->header.dup = in_h->dup;
+    this->header.flags = in_h->flags;
+    this->header.len = in_h->len;
   }
   bool valid_seq() const {
     return (header.seqnum >= 0 && header.seqnum <= MAXSEQNUM);
@@ -207,10 +189,13 @@ public:
   Header p_header() const {
     return header;
   }
-  
+  void printPack() const {
+    std::cout<<header.seqnum<<' '<<header.len<<std::endl;
+    std::cout<<(int)header.flags<<std::endl;
+  }
 private:
-  Header header;
-  char payload[MSS-HEADERSIZE];
+  struct Header header;
+  char payload[PAYLOAD];
 };
 
 

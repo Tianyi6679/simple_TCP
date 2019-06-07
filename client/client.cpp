@@ -81,8 +81,8 @@ int main(int argvc, char** argv) {
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
     Timer rto;
-    uint16_t seqnum = h.seqnum + PAYLOAD;
-    uint16_t cwnd = MSS;
+    uint16_t seqnum = h.seqnum + count;
+    uint16_t cwnd = PAYLOAD;
     std::list<Packet> unacked_p;
     int bytes_read = 0;
     bool reach_eof = false;
@@ -93,13 +93,12 @@ int main(int argvc, char** argv) {
     } 
     Packet p(&h, payload);
     unacked_p.push_back(p);
-    bytes_read = PAYLOAD;
+    bytes_read = count;
 
     // Monitor socket for input
     struct pollfd s_poll[1];
     s_poll[0].fd = sockfd;
     s_poll[0].events = POLLIN;
-    int time_left = RET_TO;
     int no_dup = 0;
 
     // Until we're done reading
@@ -109,10 +108,10 @@ int main(int argvc, char** argv) {
             std::cout << "Reading!\n";
         }
         
-        if (!first_packet){
+        if (!first_packet && !unacked_p.empty()){
             // Send all the unsent packets
             std::list<Packet>::iterator packet_iter = unacked_p.begin();
-            while(packet_iter!=unacked_p.end()){
+            while(packet_iter != unacked_p.end()){
                 if (packet_iter->h_seqnum() <= seqnum){
                     Header out_header = packet_iter->p_header();
                     char* out_payload = packet_iter->p_payload();
@@ -120,7 +119,6 @@ int main(int argvc, char** argv) {
                     writePacket(&out_header, out_payload, out_len, resp_buffer);
                     send(sockfd, (const char *)resp_buffer, MSS, 0); 
                     logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
-                    seqnum += PAYLOAD % MAXSEQNUM;
                 }
                 packet_iter++;
             }
@@ -128,6 +126,7 @@ int main(int argvc, char** argv) {
         else first_packet = false;
         
         while(bytes_read < congestion_manager.get_cwnd()){
+            std::cout<<congestion_manager.get_cwnd()<<std::endl;
             fin.read(p_buff, PAYLOAD);
             // How many bytes did we actually read?
             std::streamsize count = fin.gcount();
@@ -146,9 +145,6 @@ int main(int argvc, char** argv) {
                 break;
                 // handle connection teardown
             }
-            if (debug){
-            std::cout << "Packet list is not empty !\n";
-            } 
             struct Header new_header;
             // Update seqnum
             new_header.seqnum = seqnum;
@@ -159,11 +155,17 @@ int main(int argvc, char** argv) {
             Packet p(&new_header, p_buff);
             unacked_p.push_back(p);
             bytes_read += count;
+            p.printPack();
+            writePacket(&new_header, p_buff, count, resp_buffer);
+            send(sockfd, (const char *)resp_buffer, MSS, 0); 
+            logging(SEND, &new_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+            std::cout<<bytes_read<<std::endl;
         }
-
+        wait_cls(5);
         int sock_event = 0;
-
+        
         rto.start();
+        int time_left = RET_TO;
         while ((sock_event = poll(s_poll, 1, time_left)) > 0){
             if (s_poll[0].revents & POLLIN){
                 /*Receive Packet*/
@@ -183,10 +185,13 @@ int main(int argvc, char** argv) {
                             break;
                         }
                         /*Were we expecting this ack num?*/
-                        std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
+                        std::list<Packet>::iterator packet_iter = unacked_p.begin();
                         uint16_t recv_ack = recv_h.acknum;
-                        while(packet_iter!=unacked_p.end()){
+                        //std::cout<<recv_ack<<std::endl;
+                        while(packet_iter != unacked_p.end()){
+                            //packet_iter->printPack();
                             uint16_t cur_ack = packet_iter->h_seqnum() + packet_iter->payload_len();
+                            std::cout<< cur_ack<< std::endl;
                             if (cur_ack == recv_ack){
                                 // Clear packet from unreceived acks
                                 bytes_read -= packet_iter->payload_len();
@@ -197,13 +202,13 @@ int main(int argvc, char** argv) {
                                 no_dup = 0;
                                 break;
                             }
-                            else{
-                                packet_iter++ ;
-                            }
+                            packet_iter++;
+                            
                         }
                     }
                     // If list is empty, break
                     if(unacked_p.empty()){
+                        
                         break;
                     }
             }

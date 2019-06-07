@@ -33,6 +33,9 @@ int logging(int flag, struct Header* h, int cwnd, int ssthresh){
     if (flag == RECV) action = "RECV";
     else action = "SEND";
     switch (h->flags){
+        case 0:
+            flags = "";
+            break;
         case 128:
             flags = "ACK";
             break;
@@ -275,7 +278,7 @@ int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct 
 }
 /* Right now only put this thread into sleep for 2 secs */
 int wait_cls(int timeout){
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(timeout));
     return 0;
 }
 
@@ -285,214 +288,5 @@ bool seqnum_comp(Packet a, Packet b){
     }
     else return true;
 }
-/*
-int sendFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, uint16_t init_seq,
-uint16_t init_ack, uint16_t init_cwnd, bool debug) {
-    // Read from the file
-    std::ifstream req_file(filename, std::ios::binary | std::ios::ate);
-
-    // Get the file length
-    int len = req_file.tellg();
-    // Reset the pointer to the beginning of the file to read from it
-    req_file.seekg(0, std::ios::beg);
-    // Initialize buffer we'll read into and send over the socket
-    char resp_buffer[MSS];
-    memset(resp_buffer, 0, MSS);
-    // And the one for the packet payload
-    char p_buff[PAYLOAD];
-    memset(p_buff, 0, PAYLOAD);
-    // And the one we'll read from
-    char recv_buff[BUFFERSIZE];
-    memset(recv_buff, 0, BUFFERSIZE);
-
-    // Initialize timer, seqnum, acknum, congestion control, ack counter
-    Timer rto;
-    uint16_t seqnum = init_seq;
-    uint16_t acknum = init_ack;
-    uint16_t cwnd = init_cwnd;
-    std::list<Packet> unacked_p;
-    CongestionControl congestion_manager;
-
-    // Monitor socket for input
-    struct pollfd s_poll[1] ;
-
-    s_poll[0].fd = sockfd;
-    s_poll[0].events = POLLIN;
-
-    // Until we're done reading
-    while (1){
-        if (debug){
-            std::cout << "Reading!\n";
-            }
-        int bytes_read = 0;
-        while(bytes_read < congestion_manager.get_cwnd()){
-            req_file.read(p_buff, PAYLOAD);
-            // How many bytes did we actually read?
-            std::streamsize count = req_file.gcount();
-            if (debug){
-                char bytes_read[128];
-                sprintf(bytes_read, "Bytes Read: %ld\n", count);
-                std::cout << bytes_read << std::endl;
-            }
-            if (count == 0){
-                if (debug){
-                std::cout << "Done reading!\n";
-                }
-                req_file.close();
-                memset(resp_buffer, 0, MSS);
-                break;
-            }
-            // Prepare Packet for Sending - add to list
-            if (unacked_p.empty()){
-                Packet p(port, 0, 0, 0, resp_buffer, count, 0);
-                unacked_p.push_back(p);
-            }
-            else{
-                Packet last_packet_added = unacked_p.back();
-                uint16_t last_seqnum = last_packet_added.h_seqnum();
-                uint16_t last_acknum = last_packet_added.h_acknum();
-                Packet p(port, last_seqnum+1, last_acknum+1, cwnd, resp_buffer, count, 0);
-                unacked_p.push_back(p);
-            }
-            // Update seqnum
-            bytes_read += count;
-        }
-
-        // Send all the unsent packets
-
-        std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
-        while(packet_iter!=unacked_p.end()){
-            if (packet_iter->h_seqnum() > seqnum){
-                Header out_header = p.p_header();
-                char* out_payload = p.p_data();
-                int out_len = p.payload_len();
-                writePacket(&out_header, out_payload, out_len, resp_buffer);
-                seqnum += MSS;
-            }
-        }
-
-        int sock_event = 0;
-
-        if (sock_event = poll(s_poll, 1, RTO) > 0){
-            if (s_poll[0].revents & POLLIN){
-                //Receive Packet//
-                int recv_count;
-                Header recv_h;
-                char recv_p[MSS];
-                if (recv_count = recvfrom(sockfd, (char *)recv_buff, BUFFERSIZE, MSG_WAITALL, 
-                    (struct sockaddr*) &c_addr, &addr_len) != -1){
-                        readPacket(&recv_h, recv_p, 0, recv_p);
-                        //Were we expecting this ack num?//
-                        std::list<Packet>::const_iterator packet_iter = unacked_p.begin();
-                        uint16_t recv_ack = recv_h.acknum;
-                        while(packet_iter!=unacked_p.end()){
-                            uint16_t cur_ack = packet_iter->h_seqnum() + packet_iter->payload_len();
-                            if (cur_ack == recv_ack){
-                                // Clear packet from unreceived acks
-                                unacked_p.erase(packet_iter);
-                                // Restart timer
-                                rto.start();
-                                // Update ssthresh and cwnd
-                                congestion_manager.update();
-                            }
-                            else{
-                                packet_iter++ ;
-                            }
-
-                        }
-                    }
-            }
-        }
-        else{
-            congestion_manager.timeout();
-        }
-
-        if (debug){
-          std::cout << resp_buffer << std::endl;
-        }
-    }
-}
-
-
-int recvFile (char* filename, int sockfd, uint16_t port, struct sockaddr *c_addr, socklen_t addr_len, bool debug,
-uint16_t init_seqnum, uint16_t init_acknum) {
-
-    // Create the file to store data into
-    int file_p = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0666);
-
-    // Create the buffer we'll read into and send over socket
-    char incoming[MSS];
-    memset(incoming, 0, MSS);
-    char outgoing[MSS];
-    memset(outgoing, 0, MSS);
-
-    //Initialize some constants
-    int recv_bytes = 0;
-    Packet* recv_p = NULL;
-    std::list<Packet> buffered_p;
-    uint16_t acknum = init_acknum;
-    uint16_t seqnum = init_seqnum;
-
-    // While data is received
-    while(int count = recvfrom(sockfd, (char*) incoming, MSS, MSG_WAITALL, c_addr, &addr_len) != 0){
-        if (count = -1){
-            perror("Error reading from the socket");
-            exit(-1);
-        }
-        // Else store the packet in an object
-        recv_p = reinterpret_cast<Packet*>(incoming);
-        Packet* new_p = new Packet(port, recv_p->h_seqnum(), recv_p->h_acknum(), recv_p->h_dup(), recv_p->p_payload(), 
-        recv_p->payload_len(), recv_p->h_flags());
-
-        // Is it the packet we expected?
-        if (new_p->h_acknum() == acknum){
-            int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
-            if (bytes_written < 0){
-                perror("Error: unable to write data to file\n");
-            }
-            acknum += bytes_written % MAXSEQNUM ;
-            // Send ack for packet
-            Header ack_header;
-            ack_header.acknum = acknum;
-            ack_header.seqnum = seqnum;
-            int ack_len = HEADERSIZE;
-            char* payload = "\0" ;
-            writePacket(&ack_header, payload, ack_len, outgoing);
-            sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)c_addr, sizeof(*c_addr));
-
-            // Do any of the buffered packets now fall in order?
-            std::list<Packet>::const_iterator npb = buffered_p.begin();
-            while(npb != buffered_p.end()){
-                while (!buffered_p.empty() && npb->h_acknum() == acknum){
-                    int bytes_written = write(file_p, new_p->p_payload(), new_p->payload_len());
-                    if (bytes_written < 0){
-                        perror("Error: unable to write data to file\n");
-                    }
-                    buffered_p.erase(npb);
-                    acknum += bytes_written % MAXSEQNUM ;
-                    npb++;
-                }
-            }
-
-        }
-        else{
-            // We didn't receive the right packet
-
-            // Save it in a buffer, sort the buffer
-            buffered_p.push_back(*new_p);
-            buffered_p.sort(seqnum_comp);
-
-            // Send the same ack as before, mark item as a duplicate packet
-            Header ack_header;
-            ack_header.acknum = acknum;
-            ack_header.seqnum=seqnum;
-            ack_header.dup = true; 
-            int ack_len = HEADERSIZE;
-            char* payload = "\0";
-            writePacket(&ack_header, payload, ack_len, outgoing);
-            sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)c_addr, sizeof(*c_addr));
-        }
-    }
-} */
 
     

@@ -118,7 +118,8 @@ int main(int argvc, char** argv)
     resetFLAG(&(h_ack.flags));
     setACK(&(h_ack.flags));
     //std::cout<<sizeof(payload)<<' '<<h.seqnum<<std::endl;
-    h_ack.acknum = (h.seqnum + h.len) % MAXSEQNUM; 
+    acknum = (h.seqnum + h.len) % MAXSEQNUM; 
+    h_ack.acknum = acknum; 
     h_ack.seqnum = ++seqnum;
     writePacket(&h_ack, payload, 0, buffer);
     sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
@@ -139,70 +140,59 @@ int main(int argvc, char** argv)
                 break;
             }
             else{
-                std::cout << "Packet Received" << std::endl; 
-                //std::cout<<std::string(payload)<<std::endl;
-                // Create the buffer we'll read into and send over socket
-                
+                std::cout << "Packet Received" << std::endl;                
                 char incoming[MSS];
                 memset(incoming, 0, MSS);
                 char outgoing[MSS];
                 memset(outgoing, 0, MSS);
-                // Else store the packet in an object
                 
-                Packet new_p = Packet(&h, NULL);
-                int cur_ack = (h.seqnum + h.len) % MAXSEQNUM;
                 // right packet 
-                if (cur_ack == acknum){
+                if (h.seqnum == acknum){
                   // Send ack for packet
+                  fout << payload;
+                  std::cout<<std::string(payload)<<std::endl; 
+                  
                   Header ack_header;
                   resetFLAG(&(ack_header.flags));
                   setACK(&(ack_header.flags));
-                  ack_header.acknum = (h.seqnum + h.len) % MAXSEQNUM;
+                  acknum = (acknum + h.len) % MAXSEQNUM;
+                  ack_header.acknum = acknum;
                   ack_header.seqnum = (++seqnum % MAXSEQNUM);
                   writePacket(&ack_header, payload, 0, outgoing);
                   sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
                   logging(SEND, &ack_header, 0, 0);
-
                   // Do any of the buffered packets now fall in order?
-                  std::list<Packet>::const_iterator npb = buffered_p.begin();
+                  std::list<Packet>::iterator npb = buffered_p.begin();
                   while(npb != buffered_p.end()){
-                    if (npb->h_seqnum() >= acknum){
-                        fout << payload;
-                        std::cout<<std::string(payload)<<std::endl; 
+                    if (npb->h_seqnum() == acknum){
+                        fout << npb->p_payload();
+                        std::cout<<std::string(npb->p_payload())<<std::endl; 
+                        acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
                         buffered_p.erase(npb);
-                        acknum += npb->payload_len() % MAXSEQNUM ;
-                    } 
+                    }
+                    else break;
                     npb++;
                   }
                 }
                 // out-of-order packet
-                else if (cur_ack > acknum){
+                else if (h.seqnum > acknum){
                   // Save it in a buffer, sort the buffer
+                  Packet new_p = Packet(&h, payload);
                   buffered_p.push_back(new_p);
                   buffered_p.sort(seqnum_comp);
                   // Send the same ack as before, mark item as a duplicate packet
-                  Header ack_header;
-                  resetFLAG(&(ack_header.flags));
-                  setACK(&(ack_header.flags));
-                  ack_header.acknum = acknum;
-                  ack_header.seqnum= seqnum;
-                  ack_header.dup = (uint16_t)true; 
-                  writePacket(&ack_header, payload, 0, outgoing);
-                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-                  logging(SEND, &ack_header, 0, 0);
                 }
                 // duplicate packet
-                else{
-                  Header ack_header;
-                  resetFLAG(&(ack_header.flags));
-                  setACK(&(ack_header.flags));
-                  ack_header.acknum = acknum;
-                  ack_header.seqnum= seqnum;
-                  ack_header.dup = (uint16_t)true; 
-                  writePacket(&ack_header, payload, 0, outgoing);
-                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-                  logging(SEND, &ack_header, 0, 0);
-                }
+                
+              Header ack_header;
+              resetFLAG(&(ack_header.flags));
+              setACK(&(ack_header.flags));
+              ack_header.acknum = acknum;
+              ack_header.seqnum= seqnum;
+              ack_header.dup = (uint16_t)true; 
+              writePacket(&ack_header, payload, 0, outgoing);
+              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+              logging(SEND, &ack_header, 0, 0);
             }
         }
             /**********************FILE RECEIVING ENDS HERE**************************/
