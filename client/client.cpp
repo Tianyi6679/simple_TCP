@@ -33,7 +33,7 @@ int main(int argvc, char** argv) {
     servaddr.sin_addr.s_addr = INADDR_ANY; 
     socklen_t len;
     struct Header h;
-    char payload[MSS-sizeof(struct Header)];
+    char payload[PAYLOAD];
     std::cout<<sizeof(payload)<<' '<<sizeof(struct Header)<<std::endl;
     
     memset(payload, '\0', sizeof(payload));
