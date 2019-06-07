@@ -180,7 +180,7 @@ int main(int argvc, char** argv)
                 }
                 // out-of-order packet or ( duplicate )
                 else{ 
-                    if (h.seqnum > acknum && buffered_seqnum.count(h.seqnum) == 0){
+                    if ((h.seqnum > acknum || (acknum-h.seqnum)>MAXSEQNUM/2) && buffered_seqnum.count(h.seqnum) == 0){
                         Packet new_p = Packet(&h, payload);
                         std::cout << "Buffering\n";
                         std::cout << new_p.h_seqnum() << std::endl;

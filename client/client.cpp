@@ -120,12 +120,12 @@ int main(int argvc, char** argv) {
             std::cout << "Reading!\n";
         }
         
-        if (!first_packet && !unacked_p.empty()){
+        if (!first_packet){
             // Send all the unsent packets
             if (!unacked_p.empty()){
                 std::list<Packet>::iterator packet_iter = unacked_p.begin();
                 while(packet_iter != unacked_p.end()){
-                    if (packet_iter->h_seqnum() <= seqnum){
+                    if (packet_iter->h_seqnum() <= seqnum || (packet_iter->h_seqnum()- seqnum) > MAXSEQNUM/2){
                         Header out_header = packet_iter->p_header();
                         char* out_payload = packet_iter->p_payload();
                         int out_len = packet_iter->payload_len();
@@ -223,7 +223,7 @@ int main(int argvc, char** argv) {
                                 uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
                                 std::cout<< cur_ack<< std::endl;
                                 std::cout<< recv_ack<<std::endl;
-                                if (cur_ack <= recv_ack){
+                                if (cur_ack <= recv_ack || (cur_ack - recv_ack) > MAXSEQNUM/2){
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
                                     std::cout << "Erasing:\n";
