@@ -93,11 +93,13 @@ public:
     }
 
     void fast_retransmit_start(){
+        std::cout << "3 DUP ACK received, starting fast retransmit \n";
         m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
         m_cwnd = m_ssthresh + 1536;
     }
 
     void fast_retransmit_end(){
+        std::cout << "All packets in range have been resent, entering CA\n";
         m_cwnd = m_ssthresh;
         m_mode = 1;
     }
@@ -146,7 +148,7 @@ private:
     int max_cwnd = 10240; // 20 * 512
     int m_ssthresh;
     int m_mode; // 0 for slow start, 1 for congestion avoidance, 2 for fast recovery
-    int ssthresh_base = 1024;
+    int ssthresh_base = 5120;
     int cwnd_base = PAYLOAD;
 };
 

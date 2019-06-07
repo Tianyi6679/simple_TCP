@@ -5,6 +5,7 @@
 #include <string.h> 
 #include <sys/types.h> 
 #include <sys/socket.h> 
+#include <netdb.h>
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
 #include <sys/poll.h>
@@ -13,11 +14,18 @@
 #include "../tcpFunc.h"
 #define PORT     5100
 int main(int argvc, char** argv) { 
+    if (argvc != 4){
+        perror("Error, must pass in 3 arguments <HOSTNAME-OR_IP> <PORT> <FILENAME>");
+        exit(1);
+    }
+    char* hostname = argv[1];
+    int port = atoi(argv[2]);
+
     int sockfd; 
     char buffer[BUFFERSIZE]; 
     memset(buffer, sizeof(buffer), '\0');
     struct sockaddr_in     servaddr; 
-    char* fname = argv[1];
+    char* fname = argv[3];
     // Creating socket file descriptor 
     
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
@@ -28,9 +36,12 @@ int main(int argvc, char** argv) {
     memset(&servaddr, 0, sizeof(servaddr)); 
       
     // Filling server information 
-    servaddr.sin_family = AF_INET; 
-    servaddr.sin_port = htons(PORT); 
-    servaddr.sin_addr.s_addr = INADDR_ANY; 
+    servaddr.sin_family = AF_INET;
+    //servaddr.sin_port = htons(PORT); 
+    servaddr.sin_port = htons(port); 
+    //servaddr.sin_addr.s_addr = INADDR_ANY; 
+    struct hostent* server = gethostbyname(hostname);
+    bcopy((char *) server->h_addr,(char *) &servaddr.sin_addr.s_addr, server->h_length);
     socklen_t len;
     struct Header h;
     char payload[PAYLOAD];
@@ -185,6 +196,17 @@ int main(int argvc, char** argv) {
                             no_dup ++;
                             if (no_dup > 2){
                                 congestion_manager.fast_retransmit_start();
+                                std::list<Packet>::iterator retrans_iter = unacked_p.begin();
+                                char retrans_buf[MSS];
+                                memset(retrans_buf, 0, MSS);
+                                while(retrans_iter != unacked_p.end()){
+                                    struct Header cur_header = retrans_iter->p_header();
+                                    writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
+                                    retrans_buf);
+                                    send(sockfd, (const void*)retrans_buf, MSS, 0);
+                                    retrans_iter++;
+                                }
+                                congestion_manager.fast_retransmit_end();
                             }
                             break;
                         }
