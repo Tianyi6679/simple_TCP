@@ -157,17 +157,14 @@ int main(int argvc, char** argv)
                   if (!buffered_p.empty()){
                     std::list<Packet>::iterator npb = buffered_p.begin();
                     while(npb != buffered_p.end()){
+                      std::cout << "Check buffer\n";
                       if (npb->h_seqnum() == acknum){
+                          std::cout << "Erasing\n";
                           fout.write(npb->p_payload(), npb->payload_len());
                           //std::cout<<std::string(npb->p_payload())<<std::endl; 
                           acknum = (acknum + npb->payload_len()) % MAXSEQNUM;
-                          std::cout << "Erasing";
                           buffered_seqnum.erase(npb->h_seqnum());
-                          buffered_p.erase(npb);
-                      }
-                      else break;
-                      if (npb!= buffered_p.end()){
-                        npb++;
+                          npb = buffered_p.erase(npb);
                       }
                       else break;
                     }

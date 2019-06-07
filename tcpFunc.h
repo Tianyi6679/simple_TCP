@@ -156,8 +156,8 @@ private:
 class Packet {
 public:
   Packet(struct Header* in_h, char* in_payload){
-    memset(payload, 0, MSS);
-    memcpy(payload, in_payload, MSS);
+    memset(payload, 0, PAYLOAD);
+    memcpy(payload, in_payload, in_h->len);
     this->header.dest_port = in_h->dest_port;
     this->header.seqnum = in_h->seqnum;
     this->header.acknum = in_h->acknum;
