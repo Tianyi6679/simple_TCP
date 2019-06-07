@@ -287,7 +287,7 @@ int wait_cls(int timeout){
 
 bool seqnum_comp(Packet a, Packet b){
     if ((b.h_seqnum() <= a.h_seqnum() && (a.h_seqnum() - b.h_seqnum()) <= MAXSEQNUM/2) || 
-                    (b.h_seqnum() > a.h_seqnum && (b.h_seqnum()- a.h_seqnum()) > MAXSEQNUM/2)){
+                    (b.h_seqnum() > a.h_seqnum() && (b.h_seqnum()- a.h_seqnum()) > MAXSEQNUM/2)){
         return false;
     }
     else return true;
