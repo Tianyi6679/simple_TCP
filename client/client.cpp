@@ -87,7 +87,7 @@ int main(int argvc, char** argv) {
     char recv_buff[BUFFERSIZE];
     memset(recv_buff, 0, BUFFERSIZE);
     // for debugging
-    bool debug = false;
+    bool debug = true;
     //wait_cls(2);
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
@@ -172,7 +172,7 @@ int main(int argvc, char** argv) {
             bytes_read += count;
             //p.printPack();
             writePacket(&new_header, p_buff, count, resp_buffer);
-            send(sockfd, (const char *)resp_buffer, new_header.len, 0); 
+            send(sockfd, (const char *)resp_buffer, MSS, 0);
             logging(SEND, &new_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
             //std::cout<<bytes_read<<std::endl;
         }
@@ -242,7 +242,7 @@ int main(int argvc, char** argv) {
                                     struct Header cur_header = retrans_iter->p_header();
                                     writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
                                     retrans_buf);
-                                    send(sockfd, (const void*)retrans_buf, retrans_iter->payload_len() + HEADERSIZE, 0);
+                                    send(sockfd, (const void*)retrans_buf, MSS, 0);
                                     congestion_manager.fast_retransmit_end();
                                     logging(SEND, &cur_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
                                     break;

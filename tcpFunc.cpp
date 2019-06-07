@@ -184,7 +184,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
     int sendTimes = 0;
     do {
         writePacket(h, payload, 0, buffer);
-        sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+        sendto(sockfd, (const char*)buffer, MSS, 0, (const struct sockaddr*) addr, sizeof(*addr));
         logging(SEND, h, 0, 0);
         //std::cout << "Close Request Sent!" << std::endl;
         t.start();
@@ -216,7 +216,7 @@ int cls_init(int sockfd, char* buffer, struct Header* h, char* payload, struct s
             h->acknum = h->seqnum + 1;
             h->seqnum = expectack;
             writePacket(h, payload, 0, buffer);
-            sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+            sendto(sockfd, (const char*)buffer, MSS, 0, (const struct sockaddr*) addr, sizeof(*addr));
             logging(SEND, h, 0, 0);
             //std::cout << "Receive FIN and ACK Back and Wait 2 Secs" << std::endl;
         }
@@ -234,7 +234,7 @@ int cls_resp1(int sockfd, char* buffer, struct Header* h, char* payload, struct 
     h->acknum = h->seqnum + 1;
     h->seqnum = seqnum;
     writePacket(h, payload, 0, buffer);
-    sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+    sendto(sockfd, (const char*)buffer, MSS, 0, (const struct sockaddr*) addr, sizeof(*addr));
     logging(SEND, h, 0, 0);
     //std::cout << "Send ACK to FIN" << std::endl;
     return 0;
@@ -256,7 +256,7 @@ int cls_resp2(int sockfd, char* buffer, struct Header* h, char* payload, struct 
     int trial  = 0;
     do{
         writePacket(h, payload, 0, buffer);
-        sendto(sockfd, (const char*)buffer, MSS, MSG_CONFIRM, (const struct sockaddr*) addr, sizeof(*addr));
+        sendto(sockfd, (const char*)buffer, MSS, 0, (const struct sockaddr*) addr, sizeof(*addr));
         logging(SEND, h, 0, 0);
         //std::cout<<"Send Second Fin" << std::endl;
         t.start();
