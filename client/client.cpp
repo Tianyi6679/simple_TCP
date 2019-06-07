@@ -190,27 +190,7 @@ int main(int argvc, char** argv) {
                 if (recv_count = recv(sockfd, (char *)recv_buff, BUFFERSIZE, 0) != -1){
                         readPacket(&recv_h, payload, 0, recv_buff);
                         logging(RECV, &recv_h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
-                        //Is it a duplicate?
-                        /*if (recv_h.dup){
-                            //std::cout << "Got a duplicate ACK! \n";
-                            no_dup ++;
-                            if (no_dup > 2){
-                                congestion_manager.fast_retransmit_start();
-                                std::list<Packet>::iterator retrans_iter = unacked_p.begin();
-                                char retrans_buf[MSS];
-                                memset(retrans_buf, 0, MSS);
-                                while(retrans_iter != unacked_p.end()){
-                                    struct Header cur_header = retrans_iter->p_header();
-                                    writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
-                                    retrans_buf);
-                                    send(sockfd, (const void*)retrans_buf, MSS, 0);
-                                    logging(SEND, &cur_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
-                                    retrans_iter++;
-                                }
-                                congestion_manager.fast_retransmit_end();
-                            }
-                            break;
-                        }*/
+
                         /*Were we expecting this ack num?*/
                         uint16_t recv_ack = recv_h.acknum;
                         //std::cout<<recv_ack<<std::endl;
@@ -241,11 +221,37 @@ int main(int argvc, char** argv) {
                                 }
                             }
                         }
+
                     }
                     // If list is empty, break
                     if(unacked_p.empty()){
                         break;
                     }
+                    //Else, Retransmit if duplicate
+                    if (recv_h.dup && congestion_manager.get_mode()!= 2){
+                        //std::cout << "Got a duplicate ACK! \n";
+                        no_dup ++;
+                        if (no_dup > 2){
+                            no_dup = 0;
+                            std::list<Packet>::iterator retrans_iter = unacked_p.begin();
+                            char retrans_buf[MSS];
+                            memset(retrans_buf, 0, MSS);
+                            while(retrans_iter != unacked_p.end()){
+                                if (retrans_iter->h_seqnum() == recv_h.acknum){
+                                    congestion_manager.fast_retransmit_start();
+                                    struct Header cur_header = retrans_iter->p_header();
+                                    writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
+                                    retrans_buf);
+                                    send(sockfd, (const void*)retrans_buf, retrans_iter->payload_len() + HEADERSIZE, 0);
+                                    congestion_manager.fast_retransmit_end();
+                                    logging(SEND, &cur_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                                    break;
+                                }
+                                retrans_iter++;
+                            }
+                        }
+                        break;
+                    } 
             }
             time_left = time_left - rto.elapsed();
             if (time_left <= 0){

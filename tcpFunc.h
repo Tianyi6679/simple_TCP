@@ -87,14 +87,14 @@ public:
     }
 
     void timeout(){
-        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_ssthresh = std::max(m_cwnd/2, 1024);
         m_cwnd = cwnd_base;
         change_mode(0);
     }
 
     void fast_retransmit_start(){
         std::cout << "3 DUP ACK received, starting fast retransmit \n";
-        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_ssthresh = std::max(m_cwnd/2, 1024);
         m_cwnd = m_ssthresh + 1536;
     }
 
@@ -105,7 +105,7 @@ public:
     }
 
     void fast_recovery(){
-        m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
+        m_ssthresh = std::max(m_cwnd/2, 1024);
         m_cwnd = m_ssthresh + 1536;
         m_mode = 2;
     }
