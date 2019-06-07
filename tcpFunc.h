@@ -140,7 +140,7 @@ public:
 
 private:
     int m_cwnd;
-    int max_cwnd = 10240;
+    int max_cwnd = 10240; // 20 * 512
     int m_ssthresh;
     int m_mode; // 0 for slow start, 1 for congestion avoidance, 2 for fast recovery
     int ssthresh_base = 1024;

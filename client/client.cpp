@@ -81,7 +81,7 @@ int main(int argvc, char** argv) {
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
     Timer rto;
-    uint16_t seqnum = h.seqnum + count;
+    uint16_t seqnum = (h.seqnum + count) % MAXSEQNUM;
     uint16_t cwnd = PAYLOAD;
     std::list<Packet> unacked_p;
     int bytes_read = 0;
@@ -148,7 +148,7 @@ int main(int argvc, char** argv) {
             struct Header new_header;
             // Update seqnum
             new_header.seqnum = seqnum;
-            seqnum += count % MAXSEQNUM;
+            seqnum = (seqnum +count) % MAXSEQNUM;
             new_header.acknum = 0;
             new_header.len = count;
             resetFLAG(&(new_header.flags));
@@ -190,9 +190,9 @@ int main(int argvc, char** argv) {
                         //std::cout<<recv_ack<<std::endl;
                         while(packet_iter != unacked_p.end()){
                             //packet_iter->printPack();
-                            uint16_t cur_ack = packet_iter->h_seqnum() + packet_iter->payload_len();
-                            std::cout<< cur_ack<< std::endl;
-                            if (cur_ack == recv_ack){
+                            uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
+                            //std::cout<< cur_ack<< std::endl;
+                            if (cur_ack <= recv_ack){
                                 // Clear packet from unreceived acks
                                 bytes_read -= packet_iter->payload_len();
                                 unacked_p.erase(packet_iter);
@@ -200,7 +200,7 @@ int main(int argvc, char** argv) {
                                 congestion_manager.update();
                                 // Reset number of duplicates to 0
                                 no_dup = 0;
-                                break;
+                                if (cur_ack == recv_ack) break;
                             }
                             packet_iter++;
                             
@@ -208,7 +208,6 @@ int main(int argvc, char** argv) {
                     }
                     // If list is empty, break
                     if(unacked_p.empty()){
-                        
                         break;
                     }
             }

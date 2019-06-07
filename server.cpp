@@ -174,25 +174,25 @@ int main(int argvc, char** argv)
                     npb++;
                   }
                 }
-                // out-of-order packet
-                else if (h.seqnum > acknum){
-                  // Save it in a buffer, sort the buffer
-                  Packet new_p = Packet(&h, payload);
-                  buffered_p.push_back(new_p);
-                  buffered_p.sort(seqnum_comp);
+                // out-of-order packet or ( duplicate )
+                else{ 
+                    if (h.seqnum > acknum){
+                        Packet new_p = Packet(&h, payload);
+                        buffered_p.push_back(new_p);
+                        buffered_p.sort(seqnum_comp);
+                    }
                   // Send the same ack as before, mark item as a duplicate packet
+                    Header ack_header;
+                    resetFLAG(&(ack_header.flags));
+                    setACK(&(ack_header.flags));
+                    ack_header.acknum = acknum;
+                    ack_header.seqnum= seqnum;
+                    ack_header.dup = (uint16_t)true; 
+                    writePacket(&ack_header, payload, 0, outgoing);
+                    sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+                    logging(SEND, &ack_header, 0, 0);
                 }
                 // duplicate packet
-                
-              Header ack_header;
-              resetFLAG(&(ack_header.flags));
-              setACK(&(ack_header.flags));
-              ack_header.acknum = acknum;
-              ack_header.seqnum= seqnum;
-              ack_header.dup = (uint16_t)true; 
-              writePacket(&ack_header, payload, 0, outgoing);
-              sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-              logging(SEND, &ack_header, 0, 0);
             }
         }
             /**********************FILE RECEIVING ENDS HERE**************************/
