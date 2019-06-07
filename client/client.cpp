@@ -51,7 +51,7 @@ int main(int argvc, char** argv) {
     // Def congestion manager
     CongestionControl congestion_manager;
     // Establish connection to server
-    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, PORT, congestion_manager);
+    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, port, congestion_manager);
     /************************************************************************/
                         /* example file sending logic begins*/
     std::ifstream fin (fname, std::ios::binary | std::ios::ate);
