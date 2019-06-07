@@ -125,7 +125,8 @@ int main(int argvc, char** argv) {
             if (!unacked_p.empty()){
                 std::list<Packet>::iterator packet_iter = unacked_p.begin();
                 while(packet_iter != unacked_p.end()){
-                    if (packet_iter->h_seqnum() <= seqnum || (packet_iter->h_seqnum()- seqnum) > MAXSEQNUM/2){
+                    if ((packet_iter->h_seqnum() <= seqnum && (packet_iter->h_seqnum()- seqnum) <= MAXSEQNUM/2) || 
+                    (packet_iter->h_seqnum() > seqnum && (packet_iter->h_seqnum()- seqnum) > MAXSEQNUM/2)){
                         Header out_header = packet_iter->p_header();
                         char* out_payload = packet_iter->p_payload();
                         int out_len = packet_iter->payload_len();
@@ -221,15 +222,15 @@ int main(int argvc, char** argv) {
                             while(packet_iter != unacked_p.end()){
                                 //packet_iter->printPack();
                                 uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
-                                std::cout<< cur_ack<< std::endl;
-                                std::cout<< recv_ack<<std::endl;
-                                if (cur_ack <= recv_ack || (cur_ack - recv_ack) > MAXSEQNUM/2){
+                                //std::cout<< cur_ack<< std::endl;
+                                //std::cout<< recv_ack<<std::endl;
+                                if ((cur_ack <= recv_ack && (recv_ack - cur_ack) <= MAXSEQNUM/2 || 
+                                (cur_ack >= recv_ack && (cur_ack - recv_ack) > MAXSEQNUM/2)){
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
-                                    std::cout << "Erasing:\n";
-                                    std::cout << packet_iter->h_seqnum() << std::endl;
+                                    std::cout << "Erasing: "<<packet_iter->h_seqnum()<<std::endl;
+                                    //std::cout << packet_iter->h_seqnum() << std::endl;
                                     packet_iter = unacked_p.erase(packet_iter);
-                                    std::cout << "Erased!\n";
                                     // Update ssthresh and cwnd
                                     congestion_manager.update();
                                     // Reset number of duplicates to 0

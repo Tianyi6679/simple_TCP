@@ -157,9 +157,8 @@ int main(int argvc, char** argv)
                   if (!buffered_p.empty()){
                     std::list<Packet>::iterator npb = buffered_p.begin();
                     while(npb != buffered_p.end()){
-                      std::cout << "Check buffer\n";
                       if (npb->h_seqnum() == acknum){
-                          std::cout << "Erasing\n";
+                          std::cout << "Erasing "<<npb->h_seqnum()<<std::endl;
                           fout.write(npb->p_payload(), npb->payload_len());
                           //std::cout<<std::string(npb->p_payload())<<std::endl; 
                           acknum = (acknum + npb->payload_len()) % MAXSEQNUM;
@@ -180,14 +179,17 @@ int main(int argvc, char** argv)
                 }
                 // out-of-order packet or ( duplicate )
                 else{ 
-                    if ((h.seqnum > acknum || (acknum-h.seqnum)>MAXSEQNUM/2) && buffered_seqnum.count(h.seqnum) == 0){
-                        Packet new_p = Packet(&h, payload);
-                        std::cout << "Buffering\n";
-                        std::cout << new_p.h_seqnum() << std::endl;
-                          buffered_seqnum.insert(new_p.h_seqnum());
-                          buffered_p.push_back(new_p);
-                        if (buffered_p.size() > 1){
-                          buffered_p.sort(seqnum_comp);
+                    if ((h.seqnum > acknum && (acknum - h.seqnum) <= MAXSEQNUM/2) || 
+                        (h.seqnum < acknum && (acknum - h.seqnum) >  MAXSEQNUM/2) ){
+                        if (buffered_seqnum.count(h.seqnum) == 0){
+                            Packet new_p = Packet(&h, payload);
+                            std::cout << "Buffering\n";
+                            std::cout << new_p.h_seqnum() << std::endl;
+                            buffered_seqnum.insert(new_p.h_seqnum());
+                            buffered_p.push_back(new_p);
+                            if (buffered_p.size() > 1){
+                              buffered_p.sort(seqnum_comp);
+                            }
                         }
                     }
                   // Send the same ack as before, mark item as a duplicate packet
