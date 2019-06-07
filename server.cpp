@@ -162,16 +162,18 @@ int main(int argvc, char** argv)
                   sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
                   logging(SEND, &ack_header, 0, 0);
                   // Do any of the buffered packets now fall in order?
-                  std::list<Packet>::iterator npb = buffered_p.begin();
-                  while(npb != buffered_p.end()){
-                    if (npb->h_seqnum() == acknum){
-                        fout.write(npb->p_payload(), npb->payload_len());
-                        //std::cout<<std::string(npb->p_payload())<<std::endl; 
-                        acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
-                        buffered_p.erase(npb);
+                  if (!buffered_p.empty()){
+                    std::list<Packet>::iterator npb = buffered_p.begin();
+                    while(npb != buffered_p.end()){
+                      if (npb->h_seqnum() == acknum){
+                          fout.write(npb->p_payload(), npb->payload_len());
+                          //std::cout<<std::string(npb->p_payload())<<std::endl; 
+                          acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
+                          buffered_p.erase(npb);
+                      }
+                      else break;
+                      npb++;
                     }
-                    else break;
-                    npb++;
                   }
                 }
                 // out-of-order packet or ( duplicate )
