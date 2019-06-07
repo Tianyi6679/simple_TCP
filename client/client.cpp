@@ -196,6 +196,17 @@ int main(int argvc, char** argv) {
                             no_dup ++;
                             if (no_dup > 2){
                                 congestion_manager.fast_retransmit_start();
+                                std::list<Packet>::iterator retrans_iter = unacked_p.begin();
+                                char retrans_buf[MSS];
+                                memset(retrans_buf, 0, MSS);
+                                while(retrans_iter != unacked_p.end()){
+                                    struct Header cur_header = retrans_iter->p_header();
+                                    writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
+                                    retrans_buf);
+                                    send(sockfd, (const void*)retrans_buf, MSS, 0);
+                                    retrans_iter++;
+                                }
+                                congestion_manager.fast_retransmit_end();
                             }
                             break;
                         }

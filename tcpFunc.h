@@ -93,11 +93,13 @@ public:
     }
 
     void fast_retransmit_start(){
+        std::cout << "3 DUP ACK received, starting fast retransmit \n";
         m_ssthresh = std::max((int)((float)m_cwnd/(float)2), ssthresh_base);
         m_cwnd = m_ssthresh + 1536;
     }
 
     void fast_retransmit_end(){
+        std::cout << "All packets in range have been resent, entering CA\n";
         m_cwnd = m_ssthresh;
         m_mode = 1;
     }
