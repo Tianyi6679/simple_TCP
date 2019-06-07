@@ -59,7 +59,9 @@ int logging(int flag, struct Header* h, int cwnd, int ssthresh){
              <<h->acknum<<' '
              <<cwnd<<' '
              <<ssthresh<<' '
-             <<flags<<std::endl;
+             <<flags;
+    if (h->dup == (uint16_t) true) std::cout<<" DUP";
+    std::cout<<std::endl;
     return 0;
 }
 bool getACK(uint8_t flags) {return flags >> 7;}

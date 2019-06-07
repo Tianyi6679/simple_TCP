@@ -111,9 +111,10 @@ int main(int argvc, char** argv)
     std::cout << "Packet Received" << std::endl;
     fout << payload;
     std::cout<<std::string(payload)<<std::endl;
-    fout.flush();
-    Header h_ack;
-    setACK(&h_ack.flags);
+    struct Header h_ack;
+    resetFLAG(&(h_ack.flags));
+    setACK(&(h_ack.flags));
+    //std::cout<<sizeof(payload)<<' '<<h.seqnum<<std::endl;
     h_ack.acknum = (h.seqnum + sizeof(payload)) % MAXSEQNUM; 
     h_ack.seqnum = MSS % MAXSEQNUM;
     writePacket(&h_ack, payload, 0, buffer);
@@ -133,8 +134,6 @@ int main(int argvc, char** argv)
                 connected = false;
                 break;
             }
-                /* TODO add file receiving logic */
-                /* TODO add check dup logic */
             else{
                 std::cout << "Packet Received" << std::endl;
                 fout << payload;   
@@ -165,6 +164,8 @@ int main(int argvc, char** argv)
               acknum += PAYLOAD % MAXSEQNUM ;
               // Send ack for packet
               Header ack_header;
+              resetFLAG(&(ack_header.flags));
+              setACK(&(ack_header.flags));
               ack_header.acknum = acknum;
               ack_header.seqnum = seqnum;
               int ack_len = HEADERSIZE;
@@ -192,9 +193,11 @@ int main(int argvc, char** argv)
 
               // Send the same ack as before, mark item as a duplicate packet
               Header ack_header;
+              resetFLAG(&(ack_header.flags));
+              setACK(&(ack_header.flags));
               ack_header.acknum = acknum;
               ack_header.seqnum=seqnum;
-              ack_header.dup = true; 
+              ack_header.dup = (uint16_t)true; 
               int ack_len = HEADERSIZE;
               writePacket(&ack_header, payload, 0, outgoing);
               sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));

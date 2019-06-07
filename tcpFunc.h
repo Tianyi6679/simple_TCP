@@ -31,9 +31,9 @@ struct Header{
     FLAGS: ACK|FIN|SYN|PAD|PAD|PAD|PAD|PAD
     */
     uint8_t flags;
-    bool dup;
+    uint16_t dup;
     uint16_t len;
-    char padding[4];
+    //char padding[1];
 };
 
 class Timer
