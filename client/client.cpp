@@ -51,7 +51,7 @@ int main(int argvc, char** argv) {
     // Def congestion manager
     CongestionControl congestion_manager;
     // Establish connection to server
-    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, PORT, congestion_manager);
+    cnct_client(sockfd, buffer, &h, payload, &servaddr, &len, port, congestion_manager);
     /************************************************************************/
                         /* example file sending logic begins*/
     std::ifstream fin (fname, std::ios::binary | std::ios::ate);
@@ -122,17 +122,19 @@ int main(int argvc, char** argv) {
         
         if (!first_packet && !unacked_p.empty()){
             // Send all the unsent packets
-            std::list<Packet>::iterator packet_iter = unacked_p.begin();
-            while(packet_iter != unacked_p.end()){
-                if (packet_iter->h_seqnum() <= seqnum){
-                    Header out_header = packet_iter->p_header();
-                    char* out_payload = packet_iter->p_payload();
-                    int out_len = packet_iter->payload_len();
-                    writePacket(&out_header, out_payload, out_len, resp_buffer);
-                    send(sockfd, (const char *)resp_buffer, MSS, 0); 
-                    logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+            if (!unacked_p.empty()){
+                std::list<Packet>::iterator packet_iter = unacked_p.begin();
+                while(packet_iter != unacked_p.end()){
+                    if (packet_iter->h_seqnum() <= seqnum){
+                        Header out_header = packet_iter->p_header();
+                        char* out_payload = packet_iter->p_payload();
+                        int out_len = packet_iter->payload_len();
+                        writePacket(&out_header, out_payload, out_len, resp_buffer);
+                        send(sockfd, (const char *)resp_buffer, MSS, 0); 
+                        logging(SEND, &out_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
+                    }
+                    packet_iter++;
                 }
-                packet_iter++;
             }
         }
         else first_packet = false;
@@ -191,7 +193,7 @@ int main(int argvc, char** argv) {
                         readPacket(&recv_h, payload, 0, recv_buff);
                         logging(RECV, &recv_h, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
                         //Is it a duplicate?
-                        if (recv_h.dup){
+                        /*if (recv_h.dup){
                             //std::cout << "Got a duplicate ACK! \n";
                             no_dup ++;
                             if (no_dup > 2){
@@ -204,32 +206,37 @@ int main(int argvc, char** argv) {
                                     writePacket(&cur_header, retrans_iter->p_payload(), retrans_iter->payload_len(),
                                     retrans_buf);
                                     send(sockfd, (const void*)retrans_buf, MSS, 0);
+                                    logging(SEND, &cur_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
                                     retrans_iter++;
                                 }
                                 congestion_manager.fast_retransmit_end();
                             }
                             break;
-                        }
+                        }*/
                         /*Were we expecting this ack num?*/
-                        std::list<Packet>::iterator packet_iter = unacked_p.begin();
                         uint16_t recv_ack = recv_h.acknum;
                         //std::cout<<recv_ack<<std::endl;
-                        while(packet_iter != unacked_p.end()){
-                            //packet_iter->printPack();
-                            uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
-                            //std::cout<< cur_ack<< std::endl;
-                            if (cur_ack <= recv_ack){
-                                // Clear packet from unreceived acks
-                                bytes_read -= packet_iter->payload_len();
-                                unacked_p.erase(packet_iter);
-                                // Update ssthresh and cwnd
-                                congestion_manager.update();
-                                // Reset number of duplicates to 0
-                                no_dup = 0;
-                                if (cur_ack == recv_ack) break;
+                        if (!unacked_p.empty()){
+                            std::list<Packet>::iterator packet_iter = unacked_p.begin();
+                            while(packet_iter != unacked_p.end()){
+                                //packet_iter->printPack();
+                                uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
+                                std::cout<< cur_ack<< std::endl;
+                                std::cout<< recv_ack<<std::endl;
+                                if (cur_ack <= recv_ack){
+                                    // Clear packet from unreceived acks
+                                    bytes_read -= packet_iter->payload_len();
+                                    std::cout << "Erasing:\n";
+                                    unacked_p.erase(packet_iter);
+                                    // Update ssthresh and cwnd
+                                    congestion_manager.update();
+                                    // Reset number of duplicates to 0
+                                    no_dup = 0;
+                                    if (cur_ack == recv_ack) break;
+                                }
+                                packet_iter++;
+                                
                             }
-                            packet_iter++;
-                            
                         }
                     }
                     // If list is empty, break

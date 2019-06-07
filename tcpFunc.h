@@ -123,6 +123,7 @@ public:
     }
 
     void update(){
+        std::cout << "Updating control window";
         if (m_mode == 0){
             if (m_cwnd < m_ssthresh){
                 m_cwnd += 512;
