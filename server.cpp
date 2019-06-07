@@ -151,17 +151,8 @@ int main(int argvc, char** argv)
                 if (h.seqnum == acknum){
                   // Send ack for packet
                   fout.write(payload, h.len);
-                  //std::cout<<std::string(payload)<<std::endl; 
-                  
-                  Header ack_header;
-                  resetFLAG(&(ack_header.flags));
-                  setACK(&(ack_header.flags));
                   acknum = (acknum + h.len) % MAXSEQNUM;
-                  ack_header.acknum = acknum;
-                  ack_header.seqnum = (++seqnum % MAXSEQNUM);
-                  writePacket(&ack_header, payload, 0, outgoing);
-                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
-                  logging(SEND, &ack_header, 0, 0);
+                  //std::cout<<std::string(payload)<<std::endl; 
                   // Do any of the buffered packets now fall in order?
                   if (!buffered_p.empty()){
                     std::list<Packet>::iterator npb = buffered_p.begin();
@@ -169,7 +160,7 @@ int main(int argvc, char** argv)
                       if (npb->h_seqnum() == acknum){
                           fout.write(npb->p_payload(), npb->payload_len());
                           //std::cout<<std::string(npb->p_payload())<<std::endl; 
-                          acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
+                          acknum = (acknum + npb->payload_len()) % MAXSEQNUM;
                           std::cout << "Erasing";
                           buffered_seqnum.erase(npb->h_seqnum());
                           buffered_p.erase(npb);
@@ -181,6 +172,14 @@ int main(int argvc, char** argv)
                       else break;
                     }
                   }
+                  Header ack_header;
+                  resetFLAG(&(ack_header.flags));
+                  setACK(&(ack_header.flags));
+                  ack_header.acknum = acknum;
+                  ack_header.seqnum = (++seqnum % MAXSEQNUM);
+                  writePacket(&ack_header, payload, 0, outgoing);
+                  sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
+                  logging(SEND, &ack_header, 0, 0);
                 }
                 // out-of-order packet or ( duplicate )
                 else{ 
