@@ -161,7 +161,7 @@ int main(int argvc, char** argv) {
             logging(SEND, &new_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
             std::cout<<bytes_read<<std::endl;
         }
-        wait_cls(5);
+        wait_cls(1);
         int sock_event = 0;
         
         rto.start();

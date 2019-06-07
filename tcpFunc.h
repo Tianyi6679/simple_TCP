@@ -123,18 +123,21 @@ public:
     void update(){
         if (m_mode == 0){
             if (m_cwnd < m_ssthresh){
-                m_cwnd = std::min(m_cwnd + 512, max_cwnd);
+                m_cwnd += 512;
             }
             else{
                 change_mode(1);
-                m_cwnd = std::min(m_cwnd + (int)((float)(512*512) / (float)m_cwnd), max_cwnd);
+                m_cwnd += (int)((float)(512*512) / (float)m_cwnd);
             }
         }
         else if (m_mode == 1){
-            m_cwnd = std::min((int)((float)(512*512) / (float)m_cwnd), max_cwnd);
+            m_cwnd += (int)((float)(512*512) / (float)m_cwnd);
         }
         else{
-            m_cwnd = std::min(m_cwnd + 512, max_cwnd);
+            m_cwnd += 512;
+        }
+        if (m_cwnd > max_cwnd){
+          m_cwnd = max_cwnd;
         }
     }
 
