@@ -114,6 +114,7 @@ int main(int argvc, char** argv) {
 
     // Until we're done reading
     bool first_packet = true;
+    int trials =0;
     while (!reach_eof){
         
         if (debug){
@@ -180,10 +181,6 @@ int main(int argvc, char** argv) {
         
         rto.start();
         int time_left = RET_TO;
-        if ((sock_event = poll(s_poll, 1, RTO)) == 0) {
-            perror("Connection Abort!");
-            exit(1);
-        }
         while ((sock_event = poll(s_poll, 1, time_left)) > 0){
             if (s_poll[0].revents & POLLIN){
                 /*Receive Packet*/
@@ -224,7 +221,7 @@ int main(int argvc, char** argv) {
                                 uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
                                 //std::cout<< cur_ack<< std::endl;
                                 //std::cout<< recv_ack<<std::endl;
-                                if ((cur_ack <= recv_ack && (recv_ack - cur_ack) <= MAXSEQNUM/2 || 
+                                if ((cur_ack <= recv_ack && (recv_ack - cur_ack) <= MAXSEQNUM/2) || 
                                 (cur_ack >= recv_ack && (cur_ack - recv_ack) > MAXSEQNUM/2)){
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
@@ -255,7 +252,12 @@ int main(int argvc, char** argv) {
         }
         if (sock_event == 0 || time_left <= 0){
             congestion_manager.timeout();
+            if (++trials >= 20){
+                perror("Connection Abort!");
+                exit(1);
+            }
         }
+        else  trials = 0;
         if (debug){
           std::cout << resp_buffer << std::endl;
         }
