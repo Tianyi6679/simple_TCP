@@ -173,6 +173,7 @@ int main(int argvc, char** argv)
                   setACK(&(ack_header.flags));
                   ack_header.acknum = acknum;
                   ack_header.seqnum = (++seqnum % MAXSEQNUM);
+                  ack_header.dup = (uint16_t)false;
                   writePacket(&ack_header, payload, 0, outgoing);
                   sendto(sockfd, (const char *)outgoing, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
                   logging(SEND, &ack_header, 0, 0);
@@ -188,6 +189,7 @@ int main(int argvc, char** argv)
                             buffered_seqnum.insert(new_p.h_seqnum());
                             buffered_p.push_back(new_p);
                             if (buffered_p.size() > 1){
+                              std::cout << "Sorting \n";
                               buffered_p.sort(seqnum_comp);
                             }
                         }

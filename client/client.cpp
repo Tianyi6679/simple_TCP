@@ -224,7 +224,7 @@ int main(int argvc, char** argv) {
                                 uint16_t cur_ack = (packet_iter->h_seqnum() + packet_iter->payload_len()) % MAXSEQNUM;
                                 //std::cout<< cur_ack<< std::endl;
                                 //std::cout<< recv_ack<<std::endl;
-                                if ((cur_ack <= recv_ack && (recv_ack - cur_ack) <= MAXSEQNUM/2 || 
+                                if ((cur_ack <= recv_ack && (recv_ack - cur_ack) <= MAXSEQNUM/2 )|| 
                                 (cur_ack >= recv_ack && (cur_ack - recv_ack) > MAXSEQNUM/2)){
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
