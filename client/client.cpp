@@ -126,7 +126,7 @@ int main(int argvc, char** argv) {
             if (!unacked_p.empty()){
                 std::list<Packet>::iterator packet_iter = unacked_p.begin();
                 while(packet_iter != unacked_p.end()){
-                    if ((packet_iter->h_seqnum() <= seqnum && (packet_iter->h_seqnum()- seqnum) <= MAXSEQNUM/2) || 
+                    if ((packet_iter->h_seqnum() <= seqnum && (seqnum - packet_iter->h_seqnum()) <= MAXSEQNUM/2) || 
                     (packet_iter->h_seqnum() > seqnum && (packet_iter->h_seqnum()- seqnum) > MAXSEQNUM/2)){
                         Header out_header = packet_iter->p_header();
                         char* out_payload = packet_iter->p_payload();

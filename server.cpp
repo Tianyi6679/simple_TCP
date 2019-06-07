@@ -180,7 +180,7 @@ int main(int argvc, char** argv)
                 }
                 // out-of-order packet or ( duplicate )
                 else{ 
-                    if ((h.seqnum > acknum && (acknum - h.seqnum) <= MAXSEQNUM/2) || 
+                    if ((h.seqnum > acknum && (h.seqnum - acknum) <= MAXSEQNUM/2) || 
                         (h.seqnum < acknum && (acknum - h.seqnum) >  MAXSEQNUM/2) ){
                         if (buffered_seqnum.count(h.seqnum) == 0){
                             Packet new_p = Packet(&h, payload);
