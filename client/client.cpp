@@ -125,8 +125,7 @@ int main(int argvc, char** argv) {
         }
         else first_packet = false;
         
-        while(bytes_read < congestion_manager.get_cwnd()){
-            std::cout<<congestion_manager.get_cwnd()<<std::endl;
+        while(bytes_read  < congestion_manager.get_cwnd()){
             fin.read(p_buff, PAYLOAD);
             // How many bytes did we actually read?
             std::streamsize count = fin.gcount();
@@ -161,7 +160,7 @@ int main(int argvc, char** argv) {
             logging(SEND, &new_header, congestion_manager.get_cwnd(), congestion_manager.get_ssthresh());
             std::cout<<bytes_read<<std::endl;
         }
-        wait_cls(5);
+        wait_cls(1);
         int sock_event = 0;
         
         rto.start();

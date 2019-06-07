@@ -127,11 +127,11 @@ public:
             }
             else{
                 change_mode(1);
-                m_cwnd = std::min(m_cwnd + (int)((float)(512*512) / (float)m_cwnd), max_cwnd);
+                m_cwnd = std::min(m_cwnd + 512 * ((512*512) / m_cwnd), max_cwnd);
             }
         }
         else if (m_mode == 1){
-            m_cwnd = std::min((int)((float)(512*512) / (float)m_cwnd), max_cwnd);
+            m_cwnd = std::min(512* ((512*512) / m_cwnd), max_cwnd);
         }
         else{
             m_cwnd = std::min(m_cwnd + 512, max_cwnd);
