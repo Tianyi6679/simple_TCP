@@ -125,6 +125,7 @@ int main(int argvc, char** argv)
     sendto(sockfd, (const char *)buffer, MSS, 0, (const struct sockaddr *)&c_addr, sizeof(c_addr));
     logging(SEND, &h_ack, 0, 0);
     std::list<Packet> buffered_p;
+    std::set<uint16_t> buffered_seqnum;
     
     while ( (pret = poll(ufd, 1, RTO)) > 0){
         if (recvfrom(sockfd,(char *)buffer, BUFFERSIZE, MSG_WAITALL, 
@@ -169,19 +170,29 @@ int main(int argvc, char** argv)
                           fout.write(npb->p_payload(), npb->payload_len());
                           //std::cout<<std::string(npb->p_payload())<<std::endl; 
                           acknum = (acknum + npb->payload_len()) % MAXSEQNUM ;
+                          std::cout << "Erasing";
+                          buffered_seqnum.erase(npb->h_seqnum());
                           buffered_p.erase(npb);
                       }
                       else break;
-                      npb++;
+                      if (npb!= buffered_p.end()){
+                        npb++;
+                      }
+                      else break;
                     }
                   }
                 }
                 // out-of-order packet or ( duplicate )
                 else{ 
-                    if (h.seqnum > acknum){
+                    if (h.seqnum > acknum && buffered_seqnum.count(h.seqnum) == 0){
                         Packet new_p = Packet(&h, payload);
-                        buffered_p.push_back(new_p);
-                        buffered_p.sort(seqnum_comp);
+                        std::cout << "Buffering\n";
+                        std::cout << new_p.h_seqnum() << std::endl;
+                          buffered_seqnum.insert(new_p.h_seqnum());
+                          buffered_p.push_back(new_p);
+                        if (buffered_p.size() > 1){
+                          buffered_p.sort(seqnum_comp);
+                        }
                     }
                   // Send the same ack as before, mark item as a duplicate packet
                     Header ack_header;

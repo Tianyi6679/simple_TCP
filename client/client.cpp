@@ -227,15 +227,18 @@ int main(int argvc, char** argv) {
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
                                     std::cout << "Erasing:\n";
-                                    unacked_p.erase(packet_iter);
+                                    std::cout << packet_iter->h_seqnum() << std::endl;
+                                    packet_iter = unacked_p.erase(packet_iter);
+                                    std::cout << "Erased!\n";
                                     // Update ssthresh and cwnd
                                     congestion_manager.update();
                                     // Reset number of duplicates to 0
                                     no_dup = 0;
                                     if (cur_ack == recv_ack) break;
                                 }
-                                packet_iter++;
-                                
+                                else{
+                                    packet_iter++;
+                                }
                             }
                         }
                     }
