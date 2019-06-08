@@ -87,7 +87,7 @@ int main(int argvc, char** argv) {
     char recv_buff[BUFFERSIZE];
     memset(recv_buff, 0, BUFFERSIZE);
     // for debugging
-    bool debug = true;
+    bool debug = false;
     //wait_cls(2);
 
     // Initialize timer, seqnum, acknum, congestion control, ack counter
@@ -115,7 +115,7 @@ int main(int argvc, char** argv) {
     // Until we're done reading
     bool first_packet = true;
     int trials =0;
-    while (!reach_eof){
+    while (!reach_eof || !unacked_p.empty()){
         
         if (debug){
             std::cout << "Reading!\n";
@@ -141,7 +141,7 @@ int main(int argvc, char** argv) {
         }
         else first_packet = false;
         
-        while(bytes_read  < congestion_manager.get_cwnd()){
+        while(!reach_eof && bytes_read  < congestion_manager.get_cwnd()){
             fin.read(p_buff, PAYLOAD);
             // How many bytes did we actually read?
             std::streamsize count = fin.gcount();
@@ -207,7 +207,7 @@ int main(int argvc, char** argv) {
                                 (cur_ack >= recv_ack && (cur_ack - recv_ack) > MAXSEQNUM/2)){
                                     // Clear packet from unreceived acks
                                     bytes_read -= packet_iter->payload_len();
-                                    std::cout << "Erasing: "<<packet_iter->h_seqnum()<<std::endl;
+                                    //std::cout << "Erasing: "<<packet_iter->h_seqnum()<<std::endl;
                                     //std::cout << packet_iter->h_seqnum() << std::endl;
                                     packet_iter = unacked_p.erase(packet_iter);
                                     // Update ssthresh and cwnd
@@ -219,7 +219,6 @@ int main(int argvc, char** argv) {
                                 else{
                                     packet_iter++;
                                 }
-                            }
                         }
 
                     }
@@ -251,6 +250,7 @@ int main(int argvc, char** argv) {
                             }
                         }
                     } 
+                }
             }
             time_left = time_left - rto.elapsed();
             if (time_left <= 0){
@@ -269,7 +269,6 @@ int main(int argvc, char** argv) {
           std::cout << resp_buffer << std::endl;
         }
     }
-
                         
     /************************************************************************/
     if (cls_init(sockfd, buffer, &h, payload, &servaddr, &len, seqnum) == -1){

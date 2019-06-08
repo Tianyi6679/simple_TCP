@@ -29,7 +29,7 @@ void signalHandler(int signum){
             signum = 0;
             break;
         default:
-            std::cout<< " Unexpected interrupt signal "<<signum<<" received." <<std::endl;
+            std::cerr<< " Unexpected interrupt signal "<<signum<<" received." <<std::endl;
     }
     exit(signum);
 }
@@ -158,7 +158,7 @@ int main(int argvc, char** argv)
                     std::list<Packet>::iterator npb = buffered_p.begin();
                     while(npb != buffered_p.end()){
                       if (npb->h_seqnum() == acknum){
-                          std::cout << "Erasing "<<npb->h_seqnum()<<std::endl;
+                          //std::cout << "Erasing "<<npb->h_seqnum()<<std::endl;
                           fout.write(npb->p_payload(), npb->payload_len());
                           //std::cout<<std::string(npb->p_payload())<<std::endl; 
                           acknum = (acknum + npb->payload_len()) % MAXSEQNUM;
@@ -184,12 +184,12 @@ int main(int argvc, char** argv)
                         (h.seqnum < acknum && (acknum - h.seqnum) >  MAXSEQNUM/2) ){
                         if (buffered_seqnum.count(h.seqnum) == 0){
                             Packet new_p = Packet(&h, payload);
-                            std::cout << "Buffering\n";
-                            std::cout << new_p.h_seqnum() << std::endl;
+                            //std::cout << "Buffering\n";
+                            //std::cout << new_p.h_seqnum() << std::endl;
                             buffered_seqnum.insert(new_p.h_seqnum());
                             buffered_p.push_back(new_p);
                             if (buffered_p.size() > 1){
-                              std::cout << "Sorting \n";
+                              //std::cout << "Sorting \n";
                               buffered_p.sort(seqnum_comp);
                             }
                         }
