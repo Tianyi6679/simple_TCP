@@ -20,13 +20,13 @@ $(CLIENT):client.o tcpFunc.o
 	$(CXX) $(CXXFLAGS) client.o tcpFunc.o -o $(CLIENT) 
 
 server.o:server.cpp 
-	$(CXX) -c server.cpp
+	$(CXX) $(CXXFLAGS) -c server.cpp
 
 client.o:client_dir/client.cpp
-	$(CXX) -c client_dir/client.cpp
+	$(CXX) $(CXXFLAGS) -c client_dir/client.cpp
 
 tcpFunc.o:tcpFunc.cpp
-	$(CXX) -c tcpFunc.cpp
+	$(CXX) $(CXXFLAGS) -c tcpFunc.cpp
 
 dist:
 	tar cvzhf $(TARBALL) README.md Makefile server.cpp $(SOURCE2) $(S_H)
