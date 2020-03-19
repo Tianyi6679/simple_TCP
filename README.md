@@ -1,1 +1,1 @@
-# cs118_simple_TCP
+# simple_TCP
